@@ -1,0 +1,348 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Poppins:wght@400;500;600;700;800&display=swap");
+@import "tailwindcss";
+
+/* ───────── Fresh Mart design tokens ─────────
+   Use them anywhere: bg-leaf-600, text-forest, bg-lime, shadow-soft, font-display … */
+@theme {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Georgia", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Poppins", ui-serif, Georgia, serif;
+
+  --color-paper: #fbfaf4;
+  --color-forest: #0f2e1b;
+  --color-ink: #16301f;
+  --color-muted: #66756a;
+  --color-faint: #8a978c;
+  --color-cream: #f4f3e8;
+  --color-mist: #f1f6ea;
+  --color-line: #e5e9dc;
+  --color-leaf-100: #e3f1d9;
+  --color-leaf-400: #63b85a;
+  --color-leaf-500: #2f8f57;
+  --color-leaf-600: #1f7a47;
+  --color-leaf-800: #14532d;
+  --color-leaf-900: #0d3b20;
+  --color-lime: #c6ec7a;
+  --color-sun: #d9902f;
+  --color-sand: #9b7b42;
+  --color-clay: #b3674c;
+
+  --shadow-soft:
+    0 1px 2px rgba(15, 46, 27, 0.05), 0 14px 34px -18px rgba(15, 46, 27, 0.18);
+  --shadow-lift: 0 28px 50px -22px rgba(15, 46, 27, 0.35);
+
+  --animate-fade-up: fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-pop: pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+  --animate-toast: toast-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Keyframes live outside @theme so they are always included. */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--r, 0deg));
+  }
+  50% {
+    transform: translateY(-14px) rotate(calc(var(--r, 0deg) + 4deg));
+  }
+}
+@keyframes pop {
+  0% {
+    transform: scale(0.6);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 90px;
+  }
+  body {
+    @apply bg-paper font-sans leading-[1.6] text-ink antialiased;
+    background-image:
+      radial-gradient(
+        circle at 8% -8%,
+        rgba(198, 236, 122, 0.28),
+        transparent 38%
+      ),
+      radial-gradient(circle at 100% 0, rgba(47, 143, 87, 0.1), transparent 34%);
+    background-repeat: no-repeat;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-heading font-semibold leading-[1.1] text-forest;
+  }
+  button {
+    @apply cursor-pointer;
+  }
+  ::selection {
+    background: var(--color-lime);
+    color: var(--color-forest);
+  }
+  a:focus-visible,
+  button:focus-visible {
+    outline: 3px solid var(--color-sun);
+    outline-offset: 4px;
+    border-radius: 8px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Only the pieces repeated all over the app live here; everything else is inline utilities. */
+@layer components {
+  /* ── Buttons ── */
+  .btn {
+    @apply relative inline-flex items-center justify-center gap-2 rounded-xl bg-linear-to-b from-leaf-500 to-leaf-800 px-6 py-3 text-[13px] font-semibold text-white transition duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50;
+    box-shadow:
+      0 10px 22px -10px rgba(20, 83, 45, 0.7),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22);
+
+    &:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow:
+        0 18px 30px -12px rgba(20, 83, 45, 0.75),
+        inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    }
+    &:disabled {
+      box-shadow: none;
+    }
+    & svg {
+      transition: transform 0.25s;
+    }
+    &:hover:not(:disabled) svg:last-child {
+      transform: translateX(3px);
+    }
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-leaf-800/20 bg-white/60 px-6 py-3 text-[13px] font-semibold text-leaf-800 backdrop-blur transition duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-soft;
+  }
+  .text-btn {
+    @apply inline-flex items-center gap-1 text-[11px] font-semibold text-leaf-600 transition-all hover:gap-2 hover:text-leaf-800 disabled:cursor-wait disabled:opacity-50;
+  }
+
+  /* ── Forms ── */
+  .field {
+    @apply grid gap-1.5 text-xs font-semibold text-leaf-900/80;
+  }
+  .input {
+    @apply w-full min-w-0 rounded-xl border border-[#dbe4d2] bg-white px-3.5 py-3 font-normal text-ink shadow-[inset_0_1px_2px_rgba(15,46,27,0.04)] transition placeholder:text-faint/70 hover:border-leaf-400/60 focus:border-leaf-500 focus:outline-none focus:shadow-[0_0_0_4px_rgba(47,143,87,0.16)];
+  }
+
+  /* ── Text ── */
+  .eyebrow {
+    @apply inline-flex items-center gap-2 text-[11px] font-bold tracking-[2.2px] text-leaf-600 before:size-1.5 before:rounded-full before:bg-lime before:shadow-[0_0_0_3px_rgba(99,184,90,0.25)];
+  }
+  .tag {
+    @apply inline-block rounded-full bg-leaf-100 px-2.5 py-0.5 text-[10px] font-semibold tracking-[0.3px] text-leaf-800;
+  }
+
+  /* ── Layout pieces ── */
+  .page {
+    @apply animate-fade-up pb-[70px] pt-[30px] md:pt-12;
+  }
+  .page-title {
+    @apply my-5 text-[38px] tracking-[-1.5px] sm:text-5xl;
+  }
+  .stagger > * {
+    animation: fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .stagger > *:nth-child(1) {
+    animation-delay: 0.04s;
+  }
+  .stagger > *:nth-child(2) {
+    animation-delay: 0.1s;
+  }
+  .stagger > *:nth-child(3) {
+    animation-delay: 0.16s;
+  }
+  .stagger > *:nth-child(4) {
+    animation-delay: 0.22s;
+  }
+  .stagger > *:nth-child(5) {
+    animation-delay: 0.28s;
+  }
+  .stagger > *:nth-child(6) {
+    animation-delay: 0.34s;
+  }
+  .stagger > *:nth-child(n + 7) {
+    animation-delay: 0.4s;
+  }
+
+  .card {
+    @apply rounded-2xl border  border-line bg-white p-5 shadow-soft sm:p-7;
+  }
+  .glass {
+    @apply border border-white/70 bg-white/65 backdrop-blur-xl;
+  }
+  .empty-state {
+    @apply animate-fade-up rounded-2xl border border-dashed border-[#cfdcc4] bg-white/60 px-5 py-16 text-center text-sm text-muted;
+
+    h2,
+    h3 {
+      @apply mb-2 text-2xl;
+    }
+  }
+  .notice-error {
+    @apply my-4 rounded-xl border border-[#eed4c9] bg-[#fff0eb] px-4 py-[13px] text-[13px] text-[#923f2f];
+  }
+  .notice-success {
+    @apply my-4 rounded-xl border border-[#cfe6c9] bg-[#eaf6e6] px-4 py-[13px] text-[13px] text-leaf-800;
+  }
+  .image-placeholder {
+    @apply grid size-full place-items-center bg-linear-to-br from-[#eef6e2] to-[#dcebd0] text-leaf-500;
+  }
+  .skeleton {
+    @apply relative overflow-hidden rounded-xl bg-[#e8eedf];
+
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      transform: translateX(-100%);
+      background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.7),
+        transparent
+      );
+      animation: shimmer 1.4s infinite;
+    }
+  }
+  .category-card {
+    @apply rounded-2xl border border-line bg-linear-to-b from-white to-mist px-2 py-6 text-center shadow-soft transition duration-300 hover:-translate-y-1.5 hover:border-leaf-400/50 hover:shadow-lift;
+
+    & > div:first-child {
+      transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    &:hover > div:first-child {
+      transform: scale(1.18) rotate(-6deg);
+    }
+  }
+  .home-category-card {
+    @apply block overflow-hidden rounded-xl border  border-line bg-white text-left shadow-soft transition duration-300 hover:-translate-y-1 hover:border-leaf-400/50 hover:shadow-lift;
+
+    &:focus-visible {
+      @apply outline-2 outline-offset-2 outline-leaf-600;
+    }
+  }
+  .home-category-image {
+    @apply grid aspect-[4/3] place-items-center overflow-hidden bg-mist text-5xl;
+
+    img {
+      @apply h-full w-full object-cover transition duration-500 group-hover:scale-105;
+    }
+  }
+  .home-category-copy {
+    @apply px-3 py-3 sm:px-3.5;
+
+    h3 {
+      @apply my-0 text-[17px] font-semibold text-forest;
+    }
+    p {
+      @apply mb-0 mt-1 text-[10px] leading-snug text-muted;
+    }
+  }
+  .order-summary {
+    @apply self-start rounded-2xl border border-line bg-linear-to-b from-white to-mist p-6 shadow-soft md:sticky md:top-28;
+
+    h3 {
+      @apply mb-6 text-xl;
+    }
+    > div {
+      @apply my-4 flex justify-between gap-5 text-xs;
+    }
+    p {
+      @apply my-4 text-[11px] text-muted;
+    }
+    hr {
+      @apply border-0 border-t border-[#dce6d3];
+    }
+  }
+  .status-pill {
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-[#f1f0e3] px-3 py-1 text-[11px] font-semibold capitalize text-[#7c7a4a] before:size-1.5 before:rounded-full before:bg-current;
+
+    &.delivered,
+    &.confirmed {
+      @apply bg-[#e1f3d9] text-[#2f7a3c];
+    }
+    &.cancelled {
+      @apply bg-[#fae9e3] text-[#9a4f3c];
+    }
+    &.processing {
+      @apply bg-[#e1eff6] text-[#3a7686];
+    }
+  }
+  .table-wrap {
+    @apply overflow-x-auto rounded-2xl border border-line bg-white shadow-soft;
+
+    table {
+      @apply w-full border-collapse text-left text-xs;
+    }
+    th {
+      @apply whitespace-nowrap bg-mist p-4 text-left text-[10px] font-bold uppercase tracking-[1.2px] text-leaf-800/70;
+    }
+    td {
+      @apply border-t border-[#edf1e4] px-4 py-[17px];
+    }
+    tbody tr {
+      transition: background-color 0.2s;
+    }
+    tbody tr:hover {
+      background: #f8fbf3;
+    }
+    td small {
+      @apply text-[10px] text-faint;
+    }
+  }
+
+  /* ── Navigation ── */
+  .nav-link {
+    @apply inline-flex min-h-9 items-center rounded-full px-3 text-white transition duration-200 hover:bg-white/10 hover:text-white;
+
+    &.is-active {
+      @apply bg-white/15 font-semibold text-white ring-1 ring-inset ring-white/15;
+    }
+  }
+}
