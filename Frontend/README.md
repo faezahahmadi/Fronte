@@ -1,5 +1,20 @@
 # React + Vite
 
+## Local cart demo
+
+Add these settings to `.env` to start as a demo shopper and use the bundled
+sample products without running the backend:
+
+```env
+VITE_MOCK_LOGIN=true
+VITE_USE_MOCK=true
+```
+
+`VITE_MOCK_LOGIN` signs in a local demo user on app startup. `VITE_USE_MOCK`
+switches product and API requests to the bundled mock data. Either setting can
+be used independently. Restart the Vite dev server after changing environment
+variables. The demo cart is saved in this browser's local storage.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:
