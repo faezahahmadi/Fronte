@@ -184,6 +184,110 @@ class FreshMartApiTests(APITestCase):
         self.assertEqual(self.client.get("/api/orders/").data, [])
         self.assertEqual(self.client.get(f"/api/orders/{order_id}/").status_code, 404)
 
+    
+    # ---------- cart (Sprint 2) ----------
+
+    def test_cart_requires_login(self):
+        response = self.client.get("/api/cart/")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_add_to_cart_and_calculate_total(self):
+        self.client.force_authenticate(self.customer)
+
+        response = self.client.post(
+            "/api/cart/add/",
+            {"product_id": self.apple.id, "quantity": 2},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["total_items"], 2)
+        self.assertEqual(Decimal(response.data["total_price"]), Decimal("3.00"))
+        self.assertEqual(len(response.data["items"]), 1)
+        self.assertEqual(response.data["items"][0]["quantity"], 2)
+
+    def test_add_to_cart_cannot_exceed_stock(self):
+        self.client.force_authenticate(self.customer)
+
+        response = self.client.post(
+            "/api/cart/add/",
+            {"product_id": self.apple.id, "quantity": 11},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_update_cart_item_quantity(self):
+        self.client.force_authenticate(self.customer)
+
+        response = self.client.post(
+            "/api/cart/add/",
+            {"product_id": self.apple.id, "quantity": 2},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        item_id = response.data["items"][0]["id"]
+
+        response = self.client.patch(
+            f"/api/cart/items/{item_id}/",
+            {"quantity": 3},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["items"][0]["quantity"], 3)
+        self.assertEqual(Decimal(response.data["total_price"]), Decimal("4.50"))
+
+    def test_customer_cannot_access_another_users_cart_item(self):
+        self.client.force_authenticate(self.customer)
+
+        response = self.client.post(
+            "/api/cart/add/",
+            {"product_id": self.apple.id, "quantity": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        item_id = response.data["items"][0]["id"]
+
+        self.client.force_authenticate(self.other)
+
+        response = self.client.delete(
+            f"/api/cart/items/{item_id}/remove/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_remove_item_and_clear_cart(self):
+        self.client.force_authenticate(self.customer)
+
+        response = self.client.post(
+            "/api/cart/add/",
+            {"product_id": self.apple.id, "quantity": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        item_id = response.data["items"][0]["id"]
+
+        response = self.client.delete(
+            f"/api/cart/items/{item_id}/remove/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["items"], [])
+        self.assertEqual(response.data["total_items"], 0)
+
+        self.client.post(
+            "/api/cart/add/",
+            {"product_id": self.apple.id, "quantity": 1},
+            format="json",
+        )
+        response = self.client.delete("/api/cart/clear/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["items"], [])
+        self.assertEqual(response.data["total_items"], 0)
+
     # ---------- admin ----------
     def test_admin_endpoints_are_protected(self):
         self.assertEqual(self.client.get("/api/admin/products/").status_code, 401)
