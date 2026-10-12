@@ -83,7 +83,7 @@ export default function ProductPage({ id, onAdd }) {
                     return;
                   }
                   setError("");
-                  onAdd(product.id, count);
+                  onAdd(product, count);
                 }}
               >
                 Add to cart <Plus size={14} />

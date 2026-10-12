@@ -6,9 +6,8 @@ from rest_framework.authtoken.models import Token
 from rest_framework.generics import ListAPIView, ListCreateAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .models import Cart, CartItem, Category, Order, Product
 
-from .models import Category, Order, Product
+from .models import Cart, CartItem, Category, Order, Product
 from .serializers import (
     AddToCartSerializer,
     CartItemSerializer,
@@ -50,7 +49,9 @@ class HealthView(APIView):
 # ---------- Auth ----------
 def auth_response(user, http_status=status.HTTP_200_OK):
     token, _ = Token.objects.get_or_create(user=user)
-    return Response({"token": token.key, "user": UserSerializer(user).data}, status=http_status)
+    return Response(
+        {"token": token.key, "user": UserSerializer(user).data}, status=http_status
+    )
 
 
 class RegisterView(APIView):
@@ -222,6 +223,7 @@ class AdminStatsView(APIView):
             }
         )
 
+
 # ---------- Cart (Sprint 2) ----------
 def get_or_create_cart(user):
     """Every customer has exactly one cart; create it lazily on first use."""
@@ -237,6 +239,7 @@ class CartViewSet(viewsets.GenericViewSet):
     US-13: Clear cart
     US-14: View cart total (returned inside the cart payload)
     """
+
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = None
 
@@ -255,7 +258,10 @@ class CartViewSet(viewsets.GenericViewSet):
     def _cart_response(self):
         cart = get_or_create_cart(self.request.user)
         cart = self.get_queryset().get(pk=cart.pk)
-        return Response(CartSerializer(cart).data)
+        # NOTE: pass `request` in context so image_url can be an absolute URL.
+        return Response(
+            CartSerializer(cart, context={"request": self.request}).data
+        )
 
     # US-10 + US-14 — GET /api/cart/
     def list(self, request):
