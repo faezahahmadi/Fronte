@@ -47,10 +47,11 @@ export default function AuthPage({ register = false, admin = false }) {
       password: "",
       confirm_password: "",
     },
-    mode: "onTouched"
+    mode: "onTouched",
   });
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+
   async function submit(values) {
     setError("");
     setMessage("");
@@ -71,6 +72,7 @@ export default function AuthPage({ register = false, admin = false }) {
       setError(error.message);
     }
   }
+
   return (
     <section className="animate-fade-up mx-auto my-[30px] max-w-[480px] rounded-[2rem] border border-white bg-white/85 p-7 shadow-lift backdrop-blur-xl sm:mb-[70px] sm:mt-[50px] sm:p-10">
       <span className="eyebrow">
@@ -96,21 +98,25 @@ export default function AuthPage({ register = false, admin = false }) {
             <input
               className="input"
               aria-invalid={!!errors.full_name}
-              maxLength={150}
+              maxLength={50}
               autoComplete="name"
               {...registerField("full_name", {
                 required: "Enter your full name.",
                 maxLength: {
-                  value: 150,
-                  message: "Name must be 150 characters or fewer.",
+                  value: 50,
+                  message: "Name must be 50 characters or fewer.",
                 },
                 minLength: {
                   value: 3,
-                  message: "Name must at least 3.",
+                  message: "Name must be at least 3 characters.",
                 },
               })}
             />
-            {errors.full_name && <small role="alert" className="text-clay">{errors.full_name.message}</small>}
+            {errors.full_name && (
+              <small role="alert" className="text-clay">
+                {errors.full_name.message}
+              </small>
+            )}
           </label>
         )}
         <label className="field">
@@ -126,7 +132,11 @@ export default function AuthPage({ register = false, admin = false }) {
               validate: validateEmail,
             })}
           />
-          {errors.email && <small role="alert" className="text-clay">{errors.email.message}</small>}
+          {errors.email && (
+            <small role="alert" className="text-clay">
+              {errors.email.message}
+            </small>
+          )}
         </label>
         <label className="field">
           Password
@@ -145,7 +155,11 @@ export default function AuthPage({ register = false, admin = false }) {
               }),
             })}
           />
-          {errors.password && <small role="alert" className="text-clay">{errors.password.message}</small>}
+          {errors.password && (
+            <small role="alert" className="text-clay">
+              {errors.password.message}
+            </small>
+          )}
         </label>
         {register && (
           <>
@@ -166,12 +180,20 @@ export default function AuthPage({ register = false, admin = false }) {
                     value === getValues("password") || "Passwords must match.",
                 })}
               />
-              {errors.confirm_password && <small role="alert" className="text-clay">{errors.confirm_password.message}</small>}
+              {errors.confirm_password && (
+                <small role="alert" className="text-clay">
+                  {errors.confirm_password.message}
+                </small>
+              )}
             </label>
           </>
         )}
         <button className="btn" disabled={isSubmitting}>
-          {isSubmitting ? "Please wait…" : register ? "Create account" : "Log in"}
+          {isSubmitting
+            ? "Please wait…"
+            : register
+              ? "Create account"
+              : "Log in"}
         </button>
       </form>
       <p className="mt-5 text-sm text-[#788473]">

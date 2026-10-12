@@ -14,14 +14,42 @@ User = get_user_model()
 
 # ---------- Auth ----------
 class RegisterSerializer(serializers.Serializer):
-    full_name = serializers.CharField(max_length=150)
+    full_name = serializers.CharField(min_length=3, max_length=50)
     email = serializers.EmailField()
     password = serializers.CharField(min_length=8, write_only=True)
+
+    # Common email domain typos and their likely corrections.
+    COMMON_TYPOS = {
+        "gmal.com": "gmail.com",
+        "gmial.com": "gmail.com",
+        "gmai.com": "gmail.com",
+        "gamil.com": "gmail.com",
+        "gnail.com": "gmail.com",
+        "yahho.com": "yahoo.com",
+        "yaho.com": "yahoo.com",
+        "hotmial.com": "hotmail.com",
+        "hotmai.com": "hotmail.com",
+        "outlok.com": "outlook.com",
+        "outloo.com": "outlook.com",
+    }
 
     def validate_email(self, value):
         value = value.lower()
         if User.objects.filter(username=value).exists():
-            raise serializers.ValidationError("An account with this email already exists.")
+            raise serializers.ValidationError(
+                "An account with this email already exists."
+            )
+
+        # Catch common domain typos before the account is created.
+        domain = value.rsplit("@", 1)[-1]
+        if domain in self.COMMON_TYPOS:
+            suggestion = value.replace(
+                f"@{domain}", f"@{self.COMMON_TYPOS[domain]}"
+            )
+            raise serializers.ValidationError(
+                f"Did you mean {suggestion}? Please check your email."
+            )
+
         return value
 
     def validate_password(self, value):
@@ -94,6 +122,7 @@ class ProductSerializer(serializers.ModelSerializer):
             url = obj.image.url
             return request.build_absolute_uri(url) if request else url
         return obj.image_url or ""
+
 
 # ---------- Orders ----------
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -214,6 +243,7 @@ class OrderCreateSerializer(serializers.Serializer):
 
         return order
 
+
 # ---------- Cart (Sprint 2) ----------
 class CartItemSerializer(serializers.ModelSerializer):
     product_id = serializers.IntegerField(source="product.id", read_only=True)
@@ -228,6 +258,7 @@ class CartItemSerializer(serializers.ModelSerializer):
     subtotal = serializers.DecimalField(
         max_digits=10, decimal_places=2, read_only=True
     )
+
     def get_image_url(self, obj):
         request = self.context.get("request")
         product = obj.product
