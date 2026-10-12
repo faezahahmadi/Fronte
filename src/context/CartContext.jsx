@@ -1,109 +1,95 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { api } from "../services/api";
 import { useAuth } from "./AuthContext";
-import {
-  addLine,
-  buildCart,
-  loadLines,
-  reconcile,
-  removeLine,
-  saveLines,
-  setQuantity,
-} from "./cartLogic";
 
 const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
   const { user } = useAuth();
   const userId = user?.id ?? null;
-  // `state.userId` says whose lines these are, so one customer's basket is never shown to another.
-  const [state, setState] = useState({ userId: null, lines: [] });
+
+  const [cart, setCart] = useState({
+    id: null,
+    items: [],
+    total_items: 0,
+    total_price: "0.00",
+  });
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const stateRef = useRef(state);
-  const userRef = useRef(userId);
-  userRef.current = userId;
 
-  const loading = userId != null && state.userId !== userId;
-  const lines = state.userId === userId ? state.lines : [];
-
-  function current() {
-    return stateRef.current.userId === userRef.current ? stateRef.current.lines : [];
-  }
-  function commit(next) {
-    const value = { userId: userRef.current, lines: next };
-    stateRef.current = value;
-    setState(value);
-    saveLines(userRef.current, next);
-  }
-  function requireUser() {
-    if (userRef.current == null) throw new Error("Please log in to use your cart.");
-  }
-
-  // Load the saved cart whenever a customer signs in or out.
+  // Load the server-side cart whenever a customer signs in or out.
   useEffect(() => {
-    setError("");
-    const value = { userId, lines: userId == null ? [] : loadLines(userId) };
-    stateRef.current = value;
-    setState(value);
+    if (userId == null) {
+      setCart({ id: null, items: [], total_items: 0, total_price: "0.00" });
+      return;
+    }
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   async function refresh() {
-    const owner = userRef.current;
-    const saved = current();
-    if (owner == null || !saved.length) return;
+    if (userId == null) return;
+    setLoading(true);
     setError("");
     try {
-      const results = await Promise.all(
-        saved.map((line) =>
-          api(`/products/${line.product.id}/`)
-            .then((product) => [line.product.id, product])
-            .catch((failure) => {
-              if (failure.status === 404) return [line.product.id, null];
-              throw failure;
-            }),
-        ),
-      );
-      // The customer may have signed out while the prices were loading.
-      if (userRef.current !== owner) return;
-      commit(reconcile(current(), new Map(results)));
+      const data = await api("/cart/");
+      setCart(data);
     } catch (failure) {
-      if (userRef.current === owner)
-        setError("Product prices could not be refreshed. Check your connection.");
+      setError(failure.message || "Could not load your cart.");
+    } finally {
+      setLoading(false);
     }
   }
 
-  // Prices and stock may have changed since the cart was saved.
-  useEffect(() => {
-    if (userId != null && state.userId === userId) refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, state.userId]);
+  function requireUser() {
+    if (userId == null) throw new Error("Please log in to use your cart.");
+  }
 
   const value = useMemo(
     () => ({
-      cart: buildCart(lines),
+      cart,
       loading,
       error,
       refresh,
-      async add(product, quantity) {
+      async add(productId, quantity = 1) {
         requireUser();
-        commit(addLine(current(), product, Number(quantity)));
+        const data = await api("/cart/add/", {
+          method: "POST",
+          body: { product_id: productId, quantity: Number(quantity) },
+        });
+        setCart(data);
       },
-      async update(product, quantity) {
+      async update(cartItemId, quantity) {
         requireUser();
-        commit(setQuantity(current(), product, Number(quantity)));
+        const data = await api(`/cart/items/${cartItemId}/`, {
+          method: "PATCH",
+          body: { quantity: Number(quantity) },
+        });
+        setCart(data);
       },
-      async remove(product) {
+      async remove(cartItemId) {
         requireUser();
-        commit(removeLine(current(), product));
+        const data = await api(`/cart/items/${cartItemId}/remove/`, {
+          method: "DELETE",
+        });
+        setCart(data);
       },
       async clear() {
         requireUser();
-        commit([]);
+        const data = await api("/cart/clear/", { method: "DELETE" });
+        setCart(data);
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lines, loading, error, userId],
+    [cart, loading, error, userId],
   );
+
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 

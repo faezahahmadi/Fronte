@@ -1,5 +1,3 @@
-import { mockRequest } from "./mockApi";
-const Use_Mock = import.meta.env.VITE_USE_MOCK === "true";
 const baseUrl = (
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_URL ||
@@ -30,7 +28,6 @@ function friendlyError(data) {
 }
 
 async function request(path, { method = "GET", body, signal } = {}) {
-  if (Use_Mock) return mockRequest(path, { method, body, signal });
   const token = isPublic(path) ? null : localStorage.getItem("freshmart_token");
   const isFile = body instanceof FormData;
   let response;
@@ -70,17 +67,10 @@ async function request(path, { method = "GET", body, signal } = {}) {
 }
 
 export async function getHealth(signal) {
-  if (Use_Mock)
-    return {
-      api: "online",
-      database: "connected",
-      message: "show sample data",
-    };
   const response = await fetch(`${baseUrl}/health/`, { signal });
   const data = await response.json();
   if (!response.ok && response.status !== 503)
     throw new Error("Unable to check the API.");
-  // Backend answers {status, database}; the home page shows api/database/message.
   return data.status === "ok" && data.database === "ok"
     ? {
         api: "online",
@@ -152,7 +142,6 @@ async function listProducts(params, signal) {
     toProduct,
   );
 
-  // Availability and price range are applied here; the backend returns every active product.
   const available = params.get("available");
   if (available === "true") products = products.filter((p) => p.in_stock);
   if (available === "false") products = products.filter((p) => !p.in_stock);

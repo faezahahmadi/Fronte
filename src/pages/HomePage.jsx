@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Heart, House, Leaf, Truck } from "lucide-react";
 import ConnectionStatus from "../components/ConnectionStatus";
 import { api } from "../services/api";
-import { CATEGORIES } from "../services/mockData";
 
 const categoryImages = {
   "fruits-vegetables": "/categories/fruit.jpg",
@@ -21,13 +20,13 @@ const promises = [
 ];
 
 export default function HomePage() {
-  const [categories, setCategories] = useState(CATEGORIES);
+  const [categories, setCategories] = useState([]);
 
   useEffect(() => {
-    api("/categories/")
-      .then(setCategories)
-      .catch(() => setCategories(CATEGORIES));
-  }, []);
+  api("/categories/")
+    .then(setCategories)
+    .catch(() => setCategories([]));
+}, []);
 
   return (
     <>
@@ -101,11 +100,11 @@ export default function HomePage() {
               <Icon size={24} strokeWidth={1.6} />
             </span>
             <p>
-              <b className="block font-display text-[15px] text-forest">
-                {title}
-              </b>
-              <small className="block text-xs text-muted">{text}</small>
-            </p>
+  <b className="block font-display text-[15px] text-forest">
+    {title}
+  </b>
+  <small className="block text-xs text-muted">{text}</small>
+</p>
           </div>
         ))}
       </section>
@@ -131,10 +130,10 @@ export default function HomePage() {
             >
               <div className="home-category-image">
                 <img
-                  src={categoryImages[category.slug]}
-                  alt={`${category.name} category`}
-                  loading="lazy"
-                />
+  src={categoryImages[category.slug] || "/categories/fruit.jpg"}
+  alt={`${category.name} category`}
+  loading="lazy"
+/>
               </div>
               <div className="text-xl home-category-copy">
                 <h3>{category.name}</h3>

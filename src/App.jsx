@@ -31,7 +31,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const { user, ready, logout } = useAuth();
-  const { cart, add } = useCart();
+  const { cart = { total_items: 0, items: [], total_price: "0.00" }, add } = useCart();
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(""), 3500);
@@ -39,17 +39,17 @@ export default function App() {
     }
   }, [toast]);
   async function addToCart(product, quantity) {
-    if (!user) {
-      window.location.hash = "/login";
-      return;
-    }
-    try {
-      await add(product, quantity);
-      setToast(`${product.name} added to your basket.`);
-    } catch (error) {
-      setToast(error.message);
-    }
+  if (!user) {
+    window.location.hash = "/login";
+    return;
   }
+  try {
+    await add(product.id, quantity);     // ← pass the id, not the product
+    setToast(`${product.name} added to your basket.`);
+  } catch (error) {
+    setToast(error.message);
+  }
+}
   useEffect(() => {
     const changed = () => {
       setRoute(currentRoute());
@@ -130,13 +130,13 @@ export default function App() {
               className="inline-flex items-center gap-1.5"
             >
               <ShoppingBasket size={16} /> Cart
-              <b
-                key={cart.count}
-                className="animate-pop rounded-full bg-lime px-[7px] py-0.5 text-[10px] text-forest"
-                aria-label={`${cart.count} items`}
-              >
-                {cart.count}
-              </b>
+<b
+  key={cart.total_items}
+  className="animate-pop rounded-full bg-lime px-[7px] py-0.5 text-[10px] text-forest"
+  aria-label={`${cart.total_items} items`}
+>
+  {cart.total_items}
+</b>
             </NavLink>
           </nav>
           <div className="flex items-center gap-3 text-xs text-white/90">

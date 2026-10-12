@@ -20,18 +20,25 @@ export default function CartPage() {
   } = useCart();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
   async function act(action) {
     setBusy(true);
     setError("");
     try {
       await action();
-    } catch (error) {
-      setError(error.message);
+    } catch (err) {
+      setError(err.message);
     } finally {
       setBusy(false);
     }
   }
+
   if (loading) return <div className="empty-state">Loading your cart…</div>;
+
+  const items = cart?.items || [];
+  const count = cart?.total_items || 0;
+  const total = cart?.total_price || "0.00";
+
   return (
     <section className="page">
       <span className="eyebrow">YOUR EVERYDAY GOODNESS</span>
@@ -42,34 +49,40 @@ export default function CartPage() {
           Retry loading cart
         </button>
       )}
-      {cart.items.length ? (
+      {items.length ? (
         <div className="mt-[30px] grid gap-[30px] md:grid-cols-[minmax(0,1fr)_310px]">
           <div>
-            {cart.items.map((item) => (
+            {items.map((item) => (
               <article
                 className="mb-3 grid grid-cols-[60px_1fr_auto] items-center gap-3 rounded-2xl border border-line bg-white p-3.5 shadow-soft transition duration-300 hover:shadow-lift sm:grid-cols-[80px_1fr_auto_auto] sm:gap-5 sm:p-4"
                 key={item.id}
               >
                 <a
                   className="size-[60px] overflow-hidden rounded-[10px] sm:size-20"
-                  href={`#/products/${item.product.id}`}
+                  href={`#/products/${item.product_id}`}
                 >
-                  <ProductImage product={item.product} />
+                  <ProductImage
+                    product={{
+                      id: item.product_id,
+                      name: item.name,
+                      emoji: item.emoji,
+                      image_url: item.image_url,
+                      image_src: item.image_url,
+                    }}
+                  />
                   <ImageFallback />
                 </a>
                 <div className="col-span-2 sm:col-span-1">
                   <h3 className="mb-1.5 text-[15px]">
-                    <a href={`#/products/${item.product.id}`}>
-                      {item.product.name}
-                    </a>
+                    <a href={`#/products/${item.product_id}`}>{item.name}</a>
                   </h3>
                   <p className="mb-2 text-[11px] text-[#7b8873]">
-                    ${Number(item.product.price).toFixed(2)} each
+                    ${Number(item.price).toFixed(2)} {item.unit || "each"}
                   </p>
                   <button
                     className="text-btn"
                     disabled={busy}
-                    onClick={() => act(() => remove(item.product))}
+                    onClick={() => act(() => remove(item.id))}
                   >
                     Remove
                   </button>
@@ -78,9 +91,9 @@ export default function CartPage() {
                   <button
                     className={qtyButton}
                     disabled={busy || item.quantity <= 1}
-                    aria-label={`Decrease ${item.product.name}`}
+                    aria-label={`Decrease ${item.name}`}
                     onClick={() =>
-                      act(() => update(item.product, item.quantity - 1))
+                      act(() => update(item.id, item.quantity - 1))
                     }
                   >
                     <Minus size={14} />
@@ -90,14 +103,10 @@ export default function CartPage() {
                   </span>
                   <button
                     className={qtyButton}
-                    disabled={
-                      busy ||
-                      item.quantity >= item.product.stock ||
-                      !item.product.in_stock
-                    }
-                    aria-label={`Increase ${item.product.name}`}
+                    disabled={busy || item.quantity >= item.stock}
+                    aria-label={`Increase ${item.name}`}
                     onClick={() =>
-                      act(() => update(item.product, item.quantity + 1))
+                      act(() => update(item.id, item.quantity + 1))
                     }
                   >
                     <Plus size={14} />
@@ -124,11 +133,11 @@ export default function CartPage() {
             <h3>Basket summary</h3>
             <div>
               <span>Items</span>
-              <b>{cart.count}</b>
+              <b>{count}</b>
             </div>
             <div>
               <span>Subtotal</span>
-              <b>${Number(cart.total).toFixed(2)}</b>
+              <b>${Number(total).toFixed(2)}</b>
             </div>
             <p>Delivery is calculated at checkout.</p>
             <a className="btn mt-5 w-full py-3 text-xs" href="#/checkout">
