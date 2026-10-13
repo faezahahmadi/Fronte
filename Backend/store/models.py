@@ -59,6 +59,10 @@ class Order(models.Model):
         CASH = "cash", "Cash on delivery"
         CARD = "card", "Card on delivery"
 
+    class Delivery(models.TextChoices):
+        STANDARD = "standard", "Standard (2-3 days)"
+        EXPRESS = "express", "Express (next day)"
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="orders"
     )
@@ -70,6 +74,9 @@ class Order(models.Model):
     notes = models.TextField(blank=True)
     payment_method = models.CharField(
         max_length=10, choices=Payment.choices, default=Payment.CASH
+    )
+    delivery_option = models.CharField(
+        max_length=10, choices=Delivery.choices, default=Delivery.STANDARD
     )
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.PENDING

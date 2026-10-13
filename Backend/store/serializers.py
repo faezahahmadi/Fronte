@@ -149,6 +149,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "city",
             "notes",
             "payment_method",
+            "delivery_option",
             "status",
             "subtotal",
             "delivery_fee",
@@ -173,14 +174,23 @@ class CartLineSerializer(serializers.Serializer):
 
 
 class OrderCreateSerializer(serializers.Serializer):
-    full_name = serializers.CharField(max_length=150)
+    full_name = serializers.CharField(min_length=3, max_length=150)
     email = serializers.EmailField()
-    phone = serializers.CharField(max_length=30)
-    address = serializers.CharField(max_length=255)
-    city = serializers.CharField(max_length=100)
+    phone = serializers.CharField(min_length=6, max_length=30)
+    address = serializers.CharField(min_length=5, max_length=255)
+    city = serializers.CharField(min_length=2, max_length=100)
     notes = serializers.CharField(required=False, allow_blank=True)
     payment_method = serializers.ChoiceField(choices=Order.Payment.choices)
+    delivery_option = serializers.ChoiceField(choices=Order.Delivery.choices)
     items = CartLineSerializer(many=True, allow_empty=False)
+
+    def validate_phone(self, value):
+        cleaned = value.strip().replace(" ", "").replace("-", "")
+        if not cleaned.isdigit() or len(cleaned) < 6:
+            raise serializers.ValidationError(
+                "Enter a valid phone number (digits only, at least 6)."
+            )
+        return value
 
     def create(self, validated_data):
         items_data = validated_data.pop("items")
@@ -191,10 +201,26 @@ class OrderCreateSerializer(serializers.Serializer):
         for line in items_data:
             wanted[line["product"]] = wanted.get(line["product"], 0) + line["quantity"]
 
+        # Prevent duplicate submissions: reject if the same user already
+        # placed an identical order in the last 30 seconds.
+        recent = Order.objects.filter(user=user).order_by("-created_at").first()
+        if recent:
+            from django.utils import timezone
+            from datetime import timedelta
+            if timezone.now() - recent.created_at < timedelta(seconds=30):
+                same_items = set(
+                    (i.product_id, i.quantity) for i in recent.items.all()
+                ) == set(wanted.items())
+                if same_items:
+                    raise serializers.ValidationError(
+                        {"detail": "This order was already submitted. Please wait."}
+                    )
+
         delivery_fee = Decimal(settings.DELIVERY_FEE)
+        if validated_data.get("delivery_option") == Order.Delivery.EXPRESS:
+            delivery_fee += Decimal("3.00")
 
         with transaction.atomic():
-            # Lock the rows so two shoppers can't buy the last item at once.
             products = {
                 p.id: p
                 for p in Product.objects.select_for_update()
@@ -241,8 +267,10 @@ class OrderCreateSerializer(serializers.Serializer):
             order.total = subtotal + delivery_fee
             order.save(update_fields=["subtotal", "total"])
 
-        return order
+            # Clear the customer's cart after a successful order.
+            CartItem.objects.filter(cart__user=user).delete()
 
+        return order
 
 # ---------- Cart (Sprint 2) ----------
 class CartItemSerializer(serializers.ModelSerializer):
