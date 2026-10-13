@@ -47,7 +47,20 @@ class FreshMartApiTests(APITestCase):
         )
 
     def place_order(self, items):
-        return self.client.post("/api/orders/", {**ORDER_FORM, "items": items}, format="json")
+        return self.client.post(
+            "/api/orders/",
+            {
+                "full_name": "Test User",
+                "email": "test@example.com",
+                "phone": "0700123456",
+                "address": "123 Test Street",
+                "city": "Kabul",
+                "payment_method": "cash",
+                "delivery_option": "standard",
+                "items": items,
+            },
+            format="json",
+        )
 
     # ---------- health ----------
     def test_health(self):
