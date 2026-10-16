@@ -9,6 +9,8 @@ import Feedback from "./components/Feedback";
 import { useAuth } from "./context/AuthContext";
 import { useCart } from "./context/CartContext";
 import CartPage from "./pages/CartPage";
+import CheckoutPage from "./pages/CheckoutPage";
+import OrdersPage, { OrderDetails } from "./pages/OrdersPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 
 function NavLink({ href, active, children, className = "" }) {
@@ -29,7 +31,7 @@ function currentRoute() {
 export default function App() {
   const [route, setRoute] = useState(currentRoute);
   const [error, setError] = useState("");
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState(null);
   const { user, ready, logout } = useAuth();
   const { cart = { total_items: 0, items: [], total_price: "0.00" }, add } = useCart();
   useEffect(() => {
@@ -39,17 +41,21 @@ export default function App() {
     }
   }, [toast]);
   async function addToCart(product, quantity) {
-  if (!user) {
-    window.location.hash = "/login";
-    return;
+    if (!product.in_stock) {
+      setToast({ message: `${product.name} is out of stock.`, type: "error" });
+      return;
+    }
+    if (!user) {
+      window.location.hash = "/login";
+      return;
+    }
+    try {
+      await add(product.id, quantity);     // ← pass the id, not the product
+      setToast({ message: `${product.name} added to your basket.`, type: "success" });
+    } catch (error) {
+      setToast({ message: error.message, type: "error" });
+    }
   }
-  try {
-    await add(product.id, quantity);     // ← pass the id, not the product
-    setToast(`${product.name} added to your basket.`);
-  } catch (error) {
-    setToast(error.message);
-  }
-}
   useEffect(() => {
     const changed = () => {
       setRoute(currentRoute());
@@ -62,11 +68,11 @@ export default function App() {
   const productId = route.match(/^\/products\/(\d+)$/)?.[1];
   const orderId = route.match(/^\/orders\/(\d+)(?:\/confirmation)?$/)?.[1];
   const isAdmin = route.startsWith("/admin") && route !== "/admin/login";
-  // Routes reserved for later sprints: they exist but stay empty for now.
-  const isLaterSprint =
-    isAdmin || ["/checkout", "/orders"].includes(route) || !!orderId;
-  // The cart is a private area: signed-out visitors see the login form instead.
-  const isPrivate = route === "/cart";
+  // Routes reserved for a later sprint (the admin area): they exist but stay empty for now.
+  const isLaterSprint = isAdmin;
+  // Cart, checkout and orders are private: signed-out visitors see the login form instead.
+  const isPrivate =
+    ["/cart", "/checkout", "/orders"].includes(route) || !!orderId;
   let page;
   if (isLaterSprint) page = <PlaceholderPage />;
   else if (isPrivate && !ready)
@@ -85,6 +91,15 @@ export default function App() {
     );
   else if (productId) page = <ProductPage id={productId} onAdd={addToCart} />;
   else if (route === "/cart") page = <CartPage />;
+  else if (route === "/checkout") page = <CheckoutPage />;
+  else if (route === "/orders") page = <OrdersPage />;
+  else if (orderId)
+    page = (
+      <OrderDetails
+        id={orderId}
+        confirmation={route.endsWith("/confirmation")}
+      />
+    );
   else if (["/login", "/register", "/admin/login"].includes(route))
     page = (
       <AuthPage
@@ -130,13 +145,16 @@ export default function App() {
               className="inline-flex items-center gap-1.5"
             >
               <ShoppingBasket size={16} /> Cart
-<b
-  key={cart.total_items}
-  className="animate-pop rounded-full bg-lime px-[7px] py-0.5 text-[10px] text-forest"
-  aria-label={`${cart.total_items} items`}
->
-  {cart.total_items}
-</b>
+              <b
+                key={cart.total_items}
+                className="animate-pop rounded-full bg-lime px-[7px] py-0.5 text-[10px] text-forest"
+                aria-label={`${cart.total_items} items`}
+              >
+                {cart.total_items}
+              </b>
+            </NavLink>
+            <NavLink href="#/orders" active={route.startsWith("/orders")}>
+              My orders
             </NavLink>
           </nav>
           <div className="flex items-center gap-3 text-xs text-white/90">
@@ -206,11 +224,12 @@ export default function App() {
       {toast && (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
           <div
-            className="animate-toast max-w-[90vw] rounded-full bg-forest px-6 py-3 text-[13px] text-white shadow-lift ring-1 ring-white/10"
+            className={`animate-toast max-w-[90vw] rounded-full px-6 py-3 text-[13px] text-white shadow-lift ring-1 ring-white/10 ${toast.type === "error" ? "bg-red-700" : "bg-forest"}`}
             role="status"
+            aria-live="polite"
           >
-            <span className="mr-2 inline-block size-2 rounded-full bg-lime align-middle" />
-            {toast}
+            <span className={`mr-2 inline-block size-2 rounded-full align-middle ${toast.type === "error" ? "bg-red-200" : "bg-lime"}`} />
+            {toast.message}
           </div>
         </div>
       )}

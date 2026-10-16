@@ -52,9 +52,9 @@ export default function ProductCard({ product, onAdd }) {
         </span>
         {onAdd && (
           <button
-            className="btn absolute bottom-3 right-3 gap-1 px-3.5 py-2 text-[11px]"
+            className="btn absolute bottom-3 right-3 gap-1 px-3.5 py-2 text-[11px] aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
             type="button"
-            disabled={!product.in_stock}
+            aria-disabled={!product.in_stock}
             onClick={() => onAdd(product, 1)}
           >
             Add to cart<Plus size={13} />

@@ -70,8 +70,8 @@ export default function ProductPage({ id, onAdd }) {
                 />
               </label>
               <button
-                className="btn"
-                disabled={!product.in_stock}
+                className="btn aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                aria-disabled={!product.in_stock}
                 onClick={() => {
                   const count = Number(quantity);
                   if (
