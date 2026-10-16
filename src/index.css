@@ -139,13 +139,14 @@
       0 10px 22px -10px rgba(20, 83, 45, 0.7),
       inset 0 1px 0 rgba(255, 255, 255, 0.22);
 
-    &:hover:not(:disabled) {
+    &:hover:not(:disabled):not([aria-disabled="true"]) {
       transform: translateY(-2px);
       box-shadow:
         0 18px 30px -12px rgba(20, 83, 45, 0.75),
         inset 0 1px 0 rgba(255, 255, 255, 0.22);
     }
-    &:disabled {
+    &:disabled,
+    &[aria-disabled="true"] {
       box-shadow: none;
     }
     & svg {
@@ -310,7 +311,8 @@
     &.cancelled {
       @apply bg-[#fae9e3] text-[#9a4f3c];
     }
-    &.processing {
+    &.processing,
+    &.shipped {
       @apply bg-[#e1eff6] text-[#3a7686];
     }
   }
