@@ -10,6 +10,8 @@ from rest_framework.views import APIView
 from .models import Cart, CartItem, Category, Order, Product
 from .serializers import (
     AddToCartSerializer,
+    AdminCustomerSerializer,          # ✅ SPRINT 4 ADDED
+    AdminCustomerUpdateSerializer,    # ✅ SPRINT 4 ADDED
     CartItemSerializer,
     CartSerializer,
     CategorySerializer,
@@ -184,6 +186,19 @@ class AdminOrderViewSet(
     permission_classes = [permissions.IsAdminUser]
     pagination_class = None
 
+    # ✅ SPRINT 4 ADDED — support `?status=pending` etc.
+    def get_queryset(self):
+        qs = super().get_queryset()
+        status_param = self.request.query_params.get("status", "").strip()
+        if status_param:
+            valid = {choice[0] for choice in Order.Status.choices}
+            if status_param not in valid:
+                # Let DRF serialize the error cleanly.
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({"status": f"Unknown status '{status_param}'."})
+            qs = qs.filter(status=status_param)
+        return qs
+
     def partial_update(self, request, *args, **kwargs):
         order = self.get_object()
         serializer = OrderStatusSerializer(order, data=request.data)
@@ -206,6 +221,37 @@ class AdminOrderViewSet(
 
         order = self.get_queryset().get(pk=order.pk)
         return Response(OrderSerializer(order).data)
+
+
+# ✅ SPRINT 4 ADDED — US-29: Customer Account Management
+class AdminCustomerViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """
+    List / view / block-unblock customers.
+    Only non-staff users appear here — admins manage admins via Django admin.
+    """
+
+    permission_classes = [permissions.IsAdminUser]
+    pagination_class = None
+
+    def get_queryset(self):
+        return User.objects.filter(is_staff=False).order_by("-date_joined")
+
+    def get_serializer_class(self):
+        if self.request.method in ("PUT", "PATCH"):
+            return AdminCustomerUpdateSerializer
+        return AdminCustomerSerializer
+
+    def partial_update(self, request, *args, **kwargs):
+        customer = self.get_object()
+        serializer = AdminCustomerUpdateSerializer(customer, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(AdminCustomerSerializer(customer).data)
 
 
 class AdminStatsView(APIView):

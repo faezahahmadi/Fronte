@@ -359,18 +359,33 @@ class FreshMartApiTests(APITestCase):
         self.assertEqual(self.apple.stock, 6)
 
         self.client.force_authenticate(self.admin)
-        response = self.client.patch(f"/api/admin/orders/{order_id}/", {"status": "shipped"}, format="json")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["status"], "shipped")
 
-        response = self.client.patch(f"/api/admin/orders/{order_id}/", {"status": "cancelled"}, format="json")
+        # pending -> processing (allowed)
+        response = self.client.patch(
+            f"/api/admin/orders/{order_id}/",
+            {"status": "processing"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "processing")
+
+        # processing -> cancelled (allowed) - THIS RESTORES STOCK
+        response = self.client.patch(
+            f"/api/admin/orders/{order_id}/",
+            {"status": "cancelled"},
+            format="json",
+        )
         self.assertEqual(response.status_code, 200)
         self.apple.refresh_from_db()
         self.assertEqual(self.apple.stock, 10)
         self.assertEqual(self.apple.sold_count, 0)
 
         # A cancelled order is final.
-        response = self.client.patch(f"/api/admin/orders/{order_id}/", {"status": "pending"}, format="json")
+        response = self.client.patch(
+            f"/api/admin/orders/{order_id}/",
+            {"status": "pending"},
+            format="json",
+        )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.apple.refresh_from_db()
         self.assertEqual(self.apple.stock, 10)
@@ -382,3 +397,113 @@ class FreshMartApiTests(APITestCase):
         self.assertEqual(response.data["total_products"], 3)
         self.assertEqual(response.data["total_customers"], 2)
         self.assertEqual(response.data["total_orders"], 0)
+
+
+        # ---------- Sprint 4: Admin customer management ----------
+    def test_admin_customer_endpoints_are_protected(self):
+        self.assertEqual(self.client.get("/api/admin/customers/").status_code, 401)
+        self.client.force_authenticate(self.customer)
+        self.assertEqual(self.client.get("/api/admin/customers/").status_code, 403)
+
+    def test_admin_can_list_and_retrieve_customers(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.get("/api/admin/customers/")
+        self.assertEqual(response.status_code, 200)
+        emails = {c["email"] for c in response.data}
+        self.assertIn("shopper@example.com", emails)
+        self.assertIn("other@example.com", emails)
+        # Admins themselves must not appear.
+        self.assertNotIn("admin@example.com", emails)
+
+        customer = User.objects.get(username="shopper@example.com")
+        detail = self.client.get(f"/api/admin/customers/{customer.id}/")
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.data["email"], "shopper@example.com")
+        self.assertIn("order_count", detail.data)
+        self.assertIn("total_spent", detail.data)
+
+    def test_admin_can_block_and_unblock_customer(self):
+        self.client.force_authenticate(self.admin)
+        customer = User.objects.get(username="shopper@example.com")
+
+        response = self.client.patch(
+            f"/api/admin/customers/{customer.id}/",
+            {"is_active": False},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        customer.refresh_from_db()
+        self.assertFalse(customer.is_active)
+
+        response = self.client.patch(
+            f"/api/admin/customers/{customer.id}/",
+            {"is_active": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        customer.refresh_from_db()
+        self.assertTrue(customer.is_active)
+
+    # ---------- Sprint 4: low-stock status on products ----------
+    def test_product_exposes_stock_status(self):
+        self.client.force_authenticate(self.admin)
+        self.apple.stock = 0
+        self.apple.save(update_fields=["stock"])
+        self.milk.stock = 3
+        self.milk.save(update_fields=["stock"])
+
+        response = self.client.get(f"/api/admin/products/{self.apple.id}/")
+        self.assertEqual(response.data["stock_status"], "out_of_stock")
+
+        response = self.client.get(f"/api/admin/products/{self.milk.id}/")
+        self.assertEqual(response.data["stock_status"], "low_stock")
+
+        # A well-stocked product reports in_stock.
+        pear = Product.objects.create(
+            category=self.fruit, name="Pear", price="1.00", stock=50
+        )
+        response = self.client.get(f"/api/admin/products/{pear.id}/")
+        self.assertEqual(response.data["stock_status"], "in_stock")
+
+    # ---------- Sprint 4: order status filter ----------
+    def test_admin_can_filter_orders_by_status(self):
+        self.client.force_authenticate(self.customer)
+        order_a = self.place_order([{"product": self.apple.id, "quantity": 1}]).data["id"]
+        order_b = self.place_order([{"product": self.milk.id, "quantity": 1}]).data["id"]
+
+        self.client.force_authenticate(self.admin)
+        self.client.patch(f"/api/admin/orders/{order_b}/", {"status": "processing"}, format="json")
+
+        response = self.client.get("/api/admin/orders/?status=pending")
+        self.assertEqual([o["id"] for o in response.data], [order_a])
+
+        response = self.client.get("/api/admin/orders/?status=processing")
+        self.assertEqual([o["id"] for o in response.data], [order_b])
+
+        response = self.client.get("/api/admin/orders/?status=nonsense")
+        self.assertEqual(response.status_code, 400)
+
+    # ---------- Sprint 4: strict order transitions ----------
+    def test_order_status_transitions_are_enforced(self):
+        self.client.force_authenticate(self.customer)
+        order_id = self.place_order([{"product": self.apple.id, "quantity": 1}]).data["id"]
+
+        self.client.force_authenticate(self.admin)
+
+        # pending → delivered (skip) is not allowed.
+        response = self.client.patch(
+            f"/api/admin/orders/{order_id}/", {"status": "delivered"}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+
+        # pending → processing is allowed.
+        response = self.client.patch(
+            f"/api/admin/orders/{order_id}/", {"status": "processing"}, format="json"
+        )
+        self.assertEqual(response.status_code, 200)
+
+        # processing → delivered (skip) is not allowed.
+        response = self.client.patch(
+            f"/api/admin/orders/{order_id}/", {"status": "delivered"}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)

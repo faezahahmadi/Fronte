@@ -6,6 +6,8 @@ from . import views
 router = SimpleRouter()
 router.register("admin/products", views.AdminProductViewSet, basename="admin-product")
 router.register("admin/orders", views.AdminOrderViewSet, basename="admin-order")
+# ✅ SPRINT 4 ADDED — US-29: Customer Account Management
+router.register("admin/customers", views.AdminCustomerViewSet, basename="admin-customer")
 
 # Cart action mappings (Sprint 2)
 cart_list = views.CartViewSet.as_view({"get": "list"})

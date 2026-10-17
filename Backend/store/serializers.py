@@ -11,6 +11,9 @@ from .models import Cart, CartItem, Category, Order, OrderItem, Product
 
 User = get_user_model()
 
+# ✅ SPRINT 4 ADDED — single source of truth for "low stock"
+LOW_STOCK_LIMIT = 10
+
 
 # ---------- Auth ----------
 class RegisterSerializer(serializers.Serializer):
@@ -95,6 +98,8 @@ class ProductSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source="category.name", read_only=True)
     category_slug = serializers.CharField(source="category.slug", read_only=True)
     image_url = serializers.SerializerMethodField()
+    # ✅ SPRINT 4 ADDED — US-22: "Display product availability status"
+    stock_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -105,6 +110,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "price",
             "unit",
             "stock",
+            "stock_status",  # ✅ SPRINT 4 ADDED
             "emoji",
             "image_url",
             "is_active",
@@ -122,6 +128,14 @@ class ProductSerializer(serializers.ModelSerializer):
             url = obj.image.url
             return request.build_absolute_uri(url) if request else url
         return obj.image_url or ""
+
+    # ✅ SPRINT 4 ADDED — drives "low stock / out of stock" notifications in the UI
+    def get_stock_status(self, obj):
+        if obj.stock == 0:
+            return "out_of_stock"
+        if obj.stock <= LOW_STOCK_LIMIT:
+            return "low_stock"
+        return "in_stock"
 
 
 # ---------- Orders ----------
@@ -159,12 +173,34 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
 
 
+# ✅ SPRINT 4 ADDED — strict transition rules (US-28)
 class OrderStatusSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=Order.Status.choices)
 
+    # Which statuses may each current status move to?
+    ALLOWED_TRANSITIONS = {
+        Order.Status.PENDING: {Order.Status.PROCESSING, Order.Status.CANCELLED},
+        Order.Status.PROCESSING: {Order.Status.SHIPPED, Order.Status.CANCELLED},
+        Order.Status.SHIPPED: {Order.Status.DELIVERED},
+        Order.Status.DELIVERED: set(),  # final
+        Order.Status.CANCELLED: set(),  # final
+    }
+
     def validate_status(self, value):
-        if self.instance and self.instance.status == Order.Status.CANCELLED:
-            raise serializers.ValidationError("Cancelled orders can't be changed.")
+        if self.instance is None:
+            return value
+
+        current = self.instance.status
+
+        if current == value:
+            # No-op is fine; don't raise.
+            return value
+
+        allowed = self.ALLOWED_TRANSITIONS.get(current, set())
+        if value not in allowed:
+            raise serializers.ValidationError(
+                f"Cannot change order from '{current}' to '{value}'."
+            )
         return value
 
 
@@ -272,6 +308,7 @@ class OrderCreateSerializer(serializers.Serializer):
 
         return order
 
+
 # ---------- Cart (Sprint 2) ----------
 class CartItemSerializer(serializers.ModelSerializer):
     product_id = serializers.IntegerField(source="product.id", read_only=True)
@@ -341,3 +378,52 @@ class AddToCartSerializer(serializers.Serializer):
 class UpdateCartItemSerializer(serializers.Serializer):
     """Validates the payload for US-11 (change quantity)."""
     quantity = serializers.IntegerField(min_value=1, max_value=99)
+
+
+# ✅ SPRINT 4 ADDED — US-29: Customer Account Management
+class AdminCustomerSerializer(serializers.ModelSerializer):
+    """Read-only view of a customer for the admin panel."""
+
+    full_name = serializers.SerializerMethodField()
+    order_count = serializers.SerializerMethodField()
+    total_spent = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "email",
+            "full_name",
+            "is_active",
+            "date_joined",
+            "order_count",
+            "total_spent",
+        ]
+
+    def get_full_name(self, obj):
+        return obj.first_name or obj.email
+
+    def get_order_count(self, obj):
+        return obj.orders.count()
+
+    def get_total_spent(self, obj):
+        # Sum of every order total belonging to this customer.
+        from django.db.models import Sum
+        total = obj.orders.aggregate(s=Sum("total"))["s"]
+        return total if total is not None else Decimal("0.00")
+
+
+class AdminCustomerUpdateSerializer(serializers.ModelSerializer):
+    """The single 'allowed operation' for US-29: block / unblock a customer."""
+
+    class Meta:
+        model = User
+        fields = ["is_active"]
+
+    def validate_is_active(self, value):
+        # Never allow an admin to block another admin by mistake.
+        if self.instance and self.instance.is_staff and value is False:
+            raise serializers.ValidationError(
+                "Admin accounts cannot be blocked from here."
+            )
+        return value
