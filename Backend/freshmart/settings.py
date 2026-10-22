@@ -114,21 +114,23 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # --- Supabase Storage (Media files) ---
+# --- Supabase Storage (Media files) ---
 SUPABASE_PROJECT_ID = os.getenv("SUPABASE_PROJECT_ID", "")
 SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "media")
+SUPABASE_S3_ACCESS_KEY = os.getenv("SUPABASE_S3_ACCESS_KEY", "")
+SUPABASE_S3_SECRET_KEY = os.getenv("SUPABASE_S3_SECRET_KEY", "")
 
-if SUPABASE_PROJECT_ID and not DEBUG:
-    # Production: Use Supabase S3 Cloud Storage
+# Force Supabase if the keys exist (removed "not DEBUG" check)
+if SUPABASE_PROJECT_ID and SUPABASE_S3_ACCESS_KEY:
     STORAGES = {
         "default": {
             "BACKEND": "storages.backends.s3.S3Storage",
             "OPTIONS": {
-                "access_key": os.getenv("SUPABASE_S3_ACCESS_KEY"),
-                "secret_key": os.getenv("SUPABASE_S3_SECRET_KEY"),
+                "access_key": SUPABASE_S3_ACCESS_KEY,
+                "secret_key": SUPABASE_S3_SECRET_KEY,
                 "bucket_name": SUPABASE_BUCKET,
-                # ✅ CORRECT SUPABASE S3 ENDPOINT
                 "endpoint_url": f"https://{SUPABASE_PROJECT_ID}.storage.supabase.co/storage/v1/s3",
-                "region_name": "us-east-1", # Change if your Supabase project is in a different region
+                "region_name": "us-east-1", 
                 "default_acl": "public-read",
                 "file_overwrite": False,
                 "querystring_auth": False,
@@ -136,7 +138,6 @@ if SUPABASE_PROJECT_ID and not DEBUG:
         },
         "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
     }
-    # The public URL where the frontend will load the images from
     MEDIA_URL = f"https://{SUPABASE_PROJECT_ID}.supabase.co/storage/v1/object/public/{SUPABASE_BUCKET}/"
 else:
     # Local Development: Use local FileSystemStorage
@@ -146,7 +147,7 @@ else:
     }
     MEDIA_URL = "/media/"
     MEDIA_ROOT = BASE_DIR / "media"
-
+    
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
