@@ -12,7 +12,6 @@ load_dotenv(BASE_DIR / ".env")
 def env_list(name, default=""):
     return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
 
-
 DEBUG = os.getenv("DEBUG", "True").lower() == "true"
 
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -24,6 +23,11 @@ if not SECRET_KEY:
 
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "localhost,127.0.0.1")
 
+# Automatically add Render's hostname if it exists
+render_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+if render_hostname and render_hostname not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(render_hostname)
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -34,6 +38,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework.authtoken",
     "corsheaders",
+    "storages",  # <-- ADDED FOR SUPABASE STORAGE
     "store",
 ]
 
@@ -70,8 +75,6 @@ TEMPLATES = [
 WSGI_APPLICATION = "freshmart.wsgi.application"
 
 # --- Database ---
-# Local PostgreSQL by default (DB_* values in .env).
-# To use a cloud database later, set DATABASE_URL in .env and nothing else changes.
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
 if DATABASE_URL:
@@ -106,16 +109,43 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
-
-# --- Media files (product images uploaded to the backend) ---
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+# --- Static files ---
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STORAGES = {
-    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
-}
+
+# --- Supabase Storage (Media files) ---
+SUPABASE_PROJECT_ID = os.getenv("SUPABASE_PROJECT_ID", "")
+SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "media")
+
+if SUPABASE_PROJECT_ID and not DEBUG:
+    # Production: Use Supabase S3 Cloud Storage
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3.S3Storage",
+            "OPTIONS": {
+                "access_key": os.getenv("SUPABASE_S3_ACCESS_KEY"),
+                "secret_key": os.getenv("SUPABASE_S3_SECRET_KEY"),
+                "bucket_name": SUPABASE_BUCKET,
+                # ✅ CORRECT SUPABASE S3 ENDPOINT
+                "endpoint_url": f"https://{SUPABASE_PROJECT_ID}.storage.supabase.co/storage/v1/s3",
+                "region_name": "us-east-1", # Change if your Supabase project is in a different region
+                "default_acl": "public-read",
+                "file_overwrite": False,
+                "querystring_auth": False,
+            },
+        },
+        "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+    }
+    # The public URL where the frontend will load the images from
+    MEDIA_URL = f"https://{SUPABASE_PROJECT_ID}.supabase.co/storage/v1/object/public/{SUPABASE_BUCKET}/"
+else:
+    # Local Development: Use local FileSystemStorage
+    STORAGES = {
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+    }
+    MEDIA_URL = "/media/"
+    MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -128,14 +158,20 @@ REST_FRAMEWORK = {
     ],
 }
 
-# --- CORS: which frontend URLs may call this API ---
+# --- CORS ---
 CORS_ALLOWED_ORIGINS = env_list(
     "CORS_ALLOWED_ORIGINS",
     "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173",
 )
-CSRF_TRUSTED_ORIGINS = [
-    origin for origin in CORS_ALLOWED_ORIGINS if origin.startswith("http")
+
+# Defensive: auto-add https:// to any origin that's missing a scheme.
+CORS_ALLOWED_ORIGINS = [
+    origin if origin.startswith(("http://", "https://")) else f"https://{origin}"
+    for origin in CORS_ALLOWED_ORIGINS
+    if origin
 ]
+
+CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
