@@ -119,7 +119,7 @@ SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "media")
 SUPABASE_S3_ACCESS_KEY = os.getenv("SUPABASE_S3_ACCESS_KEY", "")
 SUPABASE_S3_SECRET_KEY = os.getenv("SUPABASE_S3_SECRET_KEY", "")
 
-# ✅ FORCE SUPABASE IF KEYS EXIST (Removed "not DEBUG")
+# ✅ FORCE SUPABASE IF KEYS EXIST
 if SUPABASE_PROJECT_ID and SUPABASE_S3_ACCESS_KEY:
     STORAGES = {
         "default": {
@@ -133,6 +133,9 @@ if SUPABASE_PROJECT_ID and SUPABASE_S3_ACCESS_KEY:
                 "default_acl": "public-read",
                 "file_overwrite": False,
                 "querystring_auth": False,
+                # ✅ ADD THESE TWO LINES TO FIX THE 403 ERROR:
+                "custom_domain": f"{SUPABASE_PROJECT_ID}.supabase.co/storage/v1/object/public/{SUPABASE_BUCKET}",
+                "url_protocol": "https:",
             },
         },
         "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
