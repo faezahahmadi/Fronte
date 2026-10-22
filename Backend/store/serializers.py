@@ -149,6 +149,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "stock",
             "stock_status",
             "emoji",
+            "image", 
             "image_url",
             "is_active",
             "sold_count",
