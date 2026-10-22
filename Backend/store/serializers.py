@@ -25,18 +25,11 @@ LOW_STOCK_LIMIT = 10
 # ---------- Product image URL helper ----------
 
 def get_public_product_image_url(product):
-    """
-    Build the public Supabase Storage URL for a product image.
-
-    Supabase public object URLs use:
-    /storage/v1/object/public/<bucket>/<image-path>
-
-    They do not use the S3 API URL.
-    """
     if not product.image:
         return product.image_url or ""
 
-    image_name = product.image.name.lstrip("/")
+    # Get JUST the filename (e.g., "apple.jpg") and ignore any broken S3 paths
+    filename = product.image.name.split("/")[-1]
 
     project_id = getattr(settings, "SUPABASE_PROJECT_ID", "")
     bucket = getattr(settings, "SUPABASE_BUCKET", "media")
@@ -44,10 +37,9 @@ def get_public_product_image_url(product):
     if project_id and bucket:
         return (
             f"https://{project_id}.supabase.co/"
-            f"storage/v1/object/public/{bucket}/{image_name}"
+            f"storage/v1/object/public/{bucket}/products/{filename}"
         )
 
-    # Local development fallback.
     return product.image.url
 
 
