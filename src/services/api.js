@@ -1,7 +1,7 @@
 const baseUrl = (
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_URL ||
-  "https://fresh-mart-i62g.onrender.com/api"
+  "https://freshmart-ikhw.onrender.com/api"
 ).replace(/\/$/, "");
 
 // Django answers 401 "Invalid token" even on public endpoints when a stale token
