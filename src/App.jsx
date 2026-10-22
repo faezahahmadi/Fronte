@@ -11,7 +11,7 @@ import { useCart } from "./context/CartContext";
 import CartPage from "./pages/CartPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import OrdersPage, { OrderDetails } from "./pages/OrdersPage";
-import PlaceholderPage from "./pages/PlaceholderPage";
+import AdminLayout from "./pages/admin/AdminLayout";
 
 function NavLink({ href, active, children, className = "" }) {
   return (
@@ -67,14 +67,14 @@ export default function App() {
   }, []);
   const productId = route.match(/^\/products\/(\d+)$/)?.[1];
   const orderId = route.match(/^\/orders\/(\d+)(?:\/confirmation)?$/)?.[1];
-  const isAdmin = route.startsWith("/admin") && route !== "/admin/login";
-  // Routes reserved for a later sprint (the admin area): they exist but stay empty for now.
-  const isLaterSprint = isAdmin;
+  // The admin area (Sprint 4): the dashboard, products, inventory, orders and customers.
+  const isAdminRoute = route === "/admin" || route.startsWith("/admin/");
+  const isAdmin = isAdminRoute && route !== "/admin/login";
   // Cart, checkout and orders are private: signed-out visitors see the login form instead.
   const isPrivate =
     ["/cart", "/checkout", "/orders"].includes(route) || !!orderId;
   let page;
-  if (isLaterSprint) page = <PlaceholderPage />;
+  if (isAdmin) page = <AdminLayout route={route} />;
   else if (isPrivate && !ready)
     page = <div className="empty-state">Loading your account…</div>;
   else if (isPrivate && !user) page = <AuthPage />;
@@ -119,7 +119,8 @@ export default function App() {
     );
   return (
     <>
-      <header className="sticky top-0 z-30 border-b border-white/10 
+      {!isAdminRoute && (
+        <header className="sticky top-0 z-30 border-b border-white/10 
       bg-linear-to-b from-leaf-900 to-forest text-white shadow-[0_12px_30px_-20px_rgba(15,46,27,0.8)]">
         <div className="mx-auto flex max-w-[1240px] flex-wrap 
         items-center justify-between gap-x-6 gap-y-3 px-6 py-3.5 md:px-10 md:py-4">
@@ -156,6 +157,11 @@ export default function App() {
             <NavLink href="#/orders" active={route.startsWith("/orders")}>
               My orders
             </NavLink>
+            {user?.is_staff && (
+              <NavLink href="#/admin" active={isAdmin}>
+                Admin
+              </NavLink>
+            )}
           </nav>
           <div className="flex items-center gap-3 text-xs text-white/90">
             {!ready ? (
@@ -187,12 +193,14 @@ export default function App() {
             )}
           </div>
         </div>
-      </header>
+        </header>
+      )}
       <main className="mx-auto max-w-[1240px] px-6 md:px-10">
         <Feedback error={error} />
         {page}
       </main>
-      <footer className="mt-16 bg-linear-to-b from-leaf-900 to-forest text-white/75">
+      {!isAdminRoute && (
+        <footer className="mt-16 bg-linear-to-b from-leaf-900 to-forest text-white/75">
         <div className="mx-auto grid max-w-[1240px] gap-10 px-6 py-14 sm:grid-cols-[1.4fr_1fr_1fr] md:px-10">
           <div>
             <Brand light className="text-[26px]" />
@@ -220,7 +228,8 @@ export default function App() {
           Fresh Mart · Online Grocery Shop · University Software Engineering
           Project · Demo payment only
         </div>
-      </footer>
+        </footer>
+      )}
       {toast && (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
           <div

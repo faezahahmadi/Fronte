@@ -1,6 +1,6 @@
-# Fresh Mart frontend tests (Sprints 1 to 3)
+# Fresh Mart frontend tests (Sprints 1 to 4)
 
-16 tests in total: Sprint 1 has 5, Sprint 2 has 5, Sprint 3 has 6.
+27 tests in total: Sprint 1 has 5, Sprint 2 has 5, Sprint 3 has 6, Sprint 4 has 11.
 
 ## 1. Where to put this folder
 
@@ -44,6 +44,7 @@ To keep the tests running while you work: `npx vitest --config tests/vitest.conf
 | sprint1.test.jsx | Catalog requests use the backend's category slug and sort names; stock status, pictures and the availability/price filters; the login token is sent only to private endpoints; registration shows a message under each wrong field; a product card shows price and stock and only offers Add to cart when allowed |
 | sprint2.test.jsx | Empty cart message; items and totals with the checkout link; plus stops at the stock limit and minus stops at one; plus asks the cart to change the quantity; Clear cart only works after confirming |
 | sprint3.test.jsx | Phone rule matches the backend; delivery fees ($2 standard, $5 express); the order request body; checkout blocks an incomplete form; checkout reviews, places the order and opens the confirmation; order history lists orders with status, total and items |
+| sprint4.test.jsx | Order status steps match the backend (delivered and cancelled are final); stock status, stock quantity and price rules; the product request body (no stock when editing); the exact admin endpoints and methods; only administrators can open the admin area; dashboard counts, restock list and latest orders; product list badges and delete only after confirming; add-product form checks and request body; inventory warnings and saving a stock quantity; orders show only the allowed next steps, filter by status and save a change; customers are blocked only after confirming and can be unblocked |
 
 ## Notes
 

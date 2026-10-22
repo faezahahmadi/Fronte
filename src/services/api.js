@@ -54,9 +54,18 @@ async function request(path, { method = "GET", body, signal } = {}) {
   try {
     data = await response.json();
   } catch {
-    throw new Error(
-      "The server could not complete this request. Please try again.",
-    );
+    const error =
+      response.status === 404
+        ? new Error(
+            "The backend API endpoint was not found (404). Confirm that the configured backend includes this route.",
+          )
+        : response.ok
+          ? new Error("The server returned an unexpected non-JSON response.")
+          : new Error(
+              `The server returned an unreadable error response (HTTP ${response.status}).`,
+            );
+    error.status = response.status;
+    throw error;
   }
   if (!response.ok) {
     const error = new Error(friendlyError(data));
