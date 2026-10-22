@@ -133,9 +133,8 @@ if SUPABASE_PROJECT_ID and SUPABASE_S3_ACCESS_KEY:
                 "default_acl": "public-read",
                 "file_overwrite": False,
                 "querystring_auth": False,
-                # ✅ ADD THESE TWO LINES TO FIX THE 403 ERROR:
-                "custom_domain": f"{SUPABASE_PROJECT_ID}.supabase.co/storage/v1/object/public/{SUPABASE_BUCKET}",
-                "url_protocol": "https:",
+                "endpoint_url": f"https://{SUPABASE_PROJECT_ID}.storage.supabase.co/storage/v1/s3",
+"querystring_auth": False,
             },
         },
         "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
