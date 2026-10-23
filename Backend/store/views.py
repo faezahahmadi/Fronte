@@ -6,12 +6,13 @@ from rest_framework.authtoken.models import Token
 from rest_framework.generics import ListAPIView, ListCreateAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.parsers import MultiPartParser, FormParser  # ✅ ADDED FOR IMAGE UPLOADS
 
 from .models import Cart, CartItem, Category, Order, Product
 from .serializers import (
     AddToCartSerializer,
-    AdminCustomerSerializer,          # ✅ SPRINT 4 ADDED
-    AdminCustomerUpdateSerializer,    # ✅ SPRINT 4 ADDED
+    AdminCustomerSerializer,
+    AdminCustomerUpdateSerializer,
     CartItemSerializer,
     CartSerializer,
     CategorySerializer,
@@ -174,6 +175,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
     permission_classes = [permissions.IsAdminUser]
     pagination_class = None
+    parser_classes = [MultiPartParser, FormParser]  # ✅ ADDED FOR IMAGE UPLOADS
 
 
 class AdminOrderViewSet(
@@ -186,14 +188,12 @@ class AdminOrderViewSet(
     permission_classes = [permissions.IsAdminUser]
     pagination_class = None
 
-    # ✅ SPRINT 4 ADDED — support `?status=pending` etc.
     def get_queryset(self):
         qs = super().get_queryset()
         status_param = self.request.query_params.get("status", "").strip()
         if status_param:
             valid = {choice[0] for choice in Order.Status.choices}
             if status_param not in valid:
-                # Let DRF serialize the error cleanly.
                 from rest_framework.exceptions import ValidationError
                 raise ValidationError({"status": f"Unknown status '{status_param}'."})
             qs = qs.filter(status=status_param)
@@ -210,7 +210,6 @@ class AdminOrderViewSet(
             order.status = new_status
             order.save(update_fields=["status"])
 
-            # Put the items back on the shelf when an order is cancelled.
             if new_status == Order.Status.CANCELLED and not was_cancelled:
                 for item in order.items.all():
                     if item.product_id:
@@ -223,7 +222,6 @@ class AdminOrderViewSet(
         return Response(OrderSerializer(order).data)
 
 
-# ✅ SPRINT 4 ADDED — US-29: Customer Account Management
 class AdminCustomerViewSet(
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
@@ -304,16 +302,13 @@ class CartViewSet(viewsets.GenericViewSet):
     def _cart_response(self):
         cart = get_or_create_cart(self.request.user)
         cart = self.get_queryset().get(pk=cart.pk)
-        # NOTE: pass `request` in context so image_url can be an absolute URL.
         return Response(
             CartSerializer(cart, context={"request": self.request}).data
         )
 
-    # US-10 + US-14 — GET /api/cart/
     def list(self, request):
         return self._cart_response()
 
-    # US-09 — POST /api/cart/add/
     def add_item(self, request):
         serializer = AddToCartSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -342,7 +337,6 @@ class CartViewSet(viewsets.GenericViewSet):
 
         return self._cart_response()
 
-    # US-11 — PATCH /api/cart/items/<id>/
     def update_item(self, request, pk=None):
         serializer = UpdateCartItemSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -370,7 +364,6 @@ class CartViewSet(viewsets.GenericViewSet):
         item.save(update_fields=["quantity"])
         return self._cart_response()
 
-    # US-12 — DELETE /api/cart/items/<id>/remove/
     def remove_item(self, request, pk=None):
         try:
             item = CartItem.objects.get(pk=pk, cart__user=request.user)
@@ -382,7 +375,6 @@ class CartViewSet(viewsets.GenericViewSet):
         item.delete()
         return self._cart_response()
 
-    # US-13 — DELETE /api/cart/clear/
     def clear(self, request):
         CartItem.objects.filter(cart__user=request.user).delete()
         return self._cart_response()

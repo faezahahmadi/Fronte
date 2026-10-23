@@ -15,7 +15,6 @@ from rest_framework import serializers
 
 from .models import Cart, CartItem, Category, Order, OrderItem, Product
 
-
 User = get_user_model()
 
 # Single source of truth for low-stock notifications.
@@ -28,7 +27,7 @@ def get_public_product_image_url(product):
     if not product.image:
         return product.image_url or ""
 
-    # Get JUST the filename (e.g., "apple.jpg") and ignore any broken S3 paths
+    # Get JUST the filename (e.g., "apple.jpg")
     filename = product.image.name.split("/")[-1]
 
     project_id = getattr(settings, "SUPABASE_PROJECT_ID", "")
@@ -127,14 +126,8 @@ class CategorySerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    category_name = serializers.CharField(
-        source="category.name",
-        read_only=True,
-    )
-    category_slug = serializers.CharField(
-        source="category.slug",
-        read_only=True,
-    )
+    category_name = serializers.CharField(source="category.name", read_only=True)
+    category_slug = serializers.CharField(source="category.slug", read_only=True)
     image_url = serializers.SerializerMethodField()
     stock_status = serializers.SerializerMethodField()
 
@@ -149,7 +142,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "stock",
             "stock_status",
             "emoji",
-            "image", 
+            "image",        # ✅ THIS LINE FIXES THE UPLOAD
             "image_url",
             "is_active",
             "sold_count",
@@ -165,40 +158,24 @@ class ProductSerializer(serializers.ModelSerializer):
     def get_stock_status(self, obj):
         if obj.stock == 0:
             return "out_of_stock"
-
         if obj.stock <= LOW_STOCK_LIMIT:
             return "low_stock"
-
         return "in_stock"
 
 
 # ---------- Orders ----------
 
 class OrderItemSerializer(serializers.ModelSerializer):
-    line_total = serializers.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        read_only=True,
-    )
+    line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = OrderItem
-        fields = [
-            "id",
-            "product",
-            "product_name",
-            "unit_price",
-            "quantity",
-            "line_total",
-        ]
+        fields = ["id", "product", "product_name", "unit_price", "quantity", "line_total"]
 
 
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
-    customer_email = serializers.EmailField(
-        source="user.email",
-        read_only=True,
-    )
+    customer_email = serializers.EmailField(source="user.email", read_only=True)
 
     class Meta:
         model = Order
@@ -228,17 +205,9 @@ class OrderStatusSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=Order.Status.choices)
 
     ALLOWED_TRANSITIONS = {
-        Order.Status.PENDING: {
-            Order.Status.PROCESSING,
-            Order.Status.CANCELLED,
-        },
-        Order.Status.PROCESSING: {
-            Order.Status.SHIPPED,
-            Order.Status.CANCELLED,
-        },
-        Order.Status.SHIPPED: {
-            Order.Status.DELIVERED,
-        },
+        Order.Status.PENDING: {Order.Status.PROCESSING, Order.Status.CANCELLED},
+        Order.Status.PROCESSING: {Order.Status.SHIPPED, Order.Status.CANCELLED},
+        Order.Status.SHIPPED: {Order.Status.DELIVERED},
         Order.Status.DELIVERED: set(),
         Order.Status.CANCELLED: set(),
     }
@@ -248,12 +217,10 @@ class OrderStatusSerializer(serializers.Serializer):
             return value
 
         current = self.instance.status
-
         if current == value:
             return value
 
         allowed = self.ALLOWED_TRANSITIONS.get(current, set())
-
         if value not in allowed:
             raise serializers.ValidationError(
                 f"Cannot change order from '{current}' to '{value}'."
@@ -280,12 +247,10 @@ class OrderCreateSerializer(serializers.Serializer):
 
     def validate_phone(self, value):
         cleaned = value.strip().replace(" ", "").replace("-", "")
-
         if not cleaned.isdigit() or len(cleaned) < 6:
             raise serializers.ValidationError(
                 "Enter a valid phone number (digits only, at least 6)."
             )
-
         return value
 
     def create(self, validated_data):
@@ -294,67 +259,42 @@ class OrderCreateSerializer(serializers.Serializer):
 
         # Merge duplicate product lines.
         wanted = {}
-
         for line in items_data:
             product_id = line["product"]
-            wanted[product_id] = (
-                wanted.get(product_id, 0) + line["quantity"]
-            )
+            wanted[product_id] = wanted.get(product_id, 0) + line["quantity"]
 
-        # Prevent the same user from submitting identical items
-        # again within 30 seconds.
-        recent = (
-            Order.objects.filter(user=user)
-            .order_by("-created_at")
-            .first()
-        )
-
+        # Prevent the same user from submitting identical items again within 30 seconds.
+        recent = Order.objects.filter(user=user).order_by("-created_at").first()
         if recent and timezone.now() - recent.created_at < timedelta(seconds=30):
             recent_items = set(
-                (item.product_id, item.quantity)
-                for item in recent.items.all()
+                (item.product_id, item.quantity) for item in recent.items.all()
             )
-
             if recent_items == set(wanted.items()):
                 raise serializers.ValidationError(
-                    {
-                        "detail": (
-                            "This order was already submitted. Please wait."
-                        )
-                    }
+                    {"detail": "This order was already submitted. Please wait."}
                 )
 
         delivery_fee = Decimal(settings.DELIVERY_FEE)
-
         if validated_data["delivery_option"] == Order.Delivery.EXPRESS:
             delivery_fee += Decimal("3.00")
 
         with transaction.atomic():
             products = {
                 product.id: product
-                for product in (
-                    Product.objects.select_for_update()
-                    .filter(id__in=list(wanted), is_active=True)
-                    .order_by("id")
-                )
+                for product in Product.objects.select_for_update()
+                .filter(id__in=list(wanted), is_active=True)
+                .order_by("id")
             }
 
             problems = []
-
             for product_id, quantity in wanted.items():
                 product = products.get(product_id)
-
                 if product is None:
-                    problems.append(
-                        "A product in your cart is no longer available."
-                    )
+                    problems.append("A product in your cart is no longer available.")
                 elif product.stock == 0:
                     problems.append(f"{product.name} is out of stock.")
                 elif product.stock < quantity:
-                    problems.append(
-                        f"Only {product.stock} of {product.name} "
-                        "left in stock."
-                    )
+                    problems.append(f"Only {product.stock} of {product.name} left in stock.")
 
             if problems:
                 raise serializers.ValidationError({"items": problems})
@@ -368,10 +308,8 @@ class OrderCreateSerializer(serializers.Serializer):
             )
 
             subtotal = Decimal("0.00")
-
             for product_id, quantity in wanted.items():
                 product = products[product_id]
-
                 OrderItem.objects.create(
                     order=order,
                     product=product,
@@ -379,17 +317,13 @@ class OrderCreateSerializer(serializers.Serializer):
                     unit_price=product.price,
                     quantity=quantity,
                 )
-
                 product.stock -= quantity
                 product.sold_count += quantity
-
                 product.save(update_fields=["stock", "sold_count"])
-
                 subtotal += product.price * quantity
 
             order.subtotal = subtotal
             order.total = subtotal + delivery_fee
-
             order.save(update_fields=["subtotal", "total"])
 
             # Clear the cart only after a successful order.
@@ -401,38 +335,16 @@ class OrderCreateSerializer(serializers.Serializer):
 # ---------- Cart (Sprint 2) ----------
 
 class CartItemSerializer(serializers.ModelSerializer):
-    product_id = serializers.IntegerField(
-        source="product.id",
-        read_only=True,
-    )
-    name = serializers.CharField(
-        source="product.name",
-        read_only=True,
-    )
+    product_id = serializers.IntegerField(source="product.id", read_only=True)
+    name = serializers.CharField(source="product.name", read_only=True)
     price = serializers.DecimalField(
-        source="product.price",
-        max_digits=8,
-        decimal_places=2,
-        read_only=True,
+        source="product.price", max_digits=8, decimal_places=2, read_only=True
     )
-    unit = serializers.CharField(
-        source="product.unit",
-        read_only=True,
-    )
-    emoji = serializers.CharField(
-        source="product.emoji",
-        read_only=True,
-    )
+    unit = serializers.CharField(source="product.unit", read_only=True)
+    emoji = serializers.CharField(source="product.emoji", read_only=True)
     image_url = serializers.SerializerMethodField()
-    stock = serializers.IntegerField(
-        source="product.stock",
-        read_only=True,
-    )
-    subtotal = serializers.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        read_only=True,
-    )
+    stock = serializers.IntegerField(source="product.stock", read_only=True)
+    subtotal = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     def get_image_url(self, obj):
         return get_public_product_image_url(obj.product)
@@ -466,28 +378,18 @@ class CartSerializer(serializers.ModelSerializer):
         return sum(item.quantity for item in obj.items.all())
 
     def get_total_price(self, obj):
-        return sum(
-            (item.subtotal for item in obj.items.all()),
-            Decimal("0.00"),
-        )
+        return sum((item.subtotal for item in obj.items.all()), Decimal("0.00"))
 
 
 class AddToCartSerializer(serializers.Serializer):
     """Validates the payload for US-09 (add product to cart)."""
 
     product_id = serializers.IntegerField()
-    quantity = serializers.IntegerField(
-        min_value=1,
-        max_value=99,
-        default=1,
-    )
+    quantity = serializers.IntegerField(min_value=1, max_value=99, default=1)
 
     def validate_product_id(self, value):
         if not Product.objects.filter(pk=value, is_active=True).exists():
-            raise serializers.ValidationError(
-                "Product not found or unavailable."
-            )
-
+            raise serializers.ValidationError("Product not found or unavailable.")
         return value
 
 
@@ -526,7 +428,6 @@ class AdminCustomerSerializer(serializers.ModelSerializer):
 
     def get_total_spent(self, obj):
         total = obj.orders.aggregate(total=Sum("total"))["total"]
-
         return total if total is not None else Decimal("0.00")
 
 
@@ -543,5 +444,4 @@ class AdminCustomerUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Admin accounts cannot be blocked from here."
             )
-
         return value
