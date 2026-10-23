@@ -176,6 +176,12 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAdminUser]
     pagination_class = None
     parser_classes = [MultiPartParser, FormParser]  # ✅ ADDED FOR IMAGE UPLOADS
+    # ✅ ADD THIS ENTIRE METHOD
+    def create(self, request, *args, **kwargs):
+        print("===== INCOMING UPLOAD DEBUG =====")
+        print("REQUEST.FILES:", request.FILES)
+        print("REQUEST.DATA:", request.data)
+        return super().create(request, *args, **kwargs)
 
 
 class AdminOrderViewSet(
