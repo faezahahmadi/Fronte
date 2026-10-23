@@ -123,6 +123,28 @@ export function ProductForm({ product = null, categories, onSaved, onCancel }) {
       >
         <input className="input" placeholder="🍎" {...field("emoji")} />
       </Field>
+
+            {/* ✅ IMAGE UPLOAD FIELD */}
+      <Field 
+        label="Product Image" 
+        className="sm:col-span-2"
+        hint="Upload a .jpg or .png file. This will replace the emoji in the shop."
+      >
+        <input 
+          type="file" 
+          accept="image/*"
+          // Add this key to force React to reset the input when the form changes
+          key={product ? product.id : "new"} 
+          className="block w-full text-sm text-slate-500 file:mr-4 file:rounded-full file:border-0 file:bg-green-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-green-700 hover:file:bg-green-100"
+          onChange={(event) => {
+            setValues((current) => ({
+              ...current,
+              image_file: event.target.files[0] || null,
+            }));
+          }}
+        />
+      </Field>
+
       <Field label="Description" className="sm:col-span-2">
         <textarea className="input min-h-24" rows={3} {...field("description")} />
       </Field>

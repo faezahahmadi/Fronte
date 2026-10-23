@@ -128,6 +128,7 @@ function toProduct(product) {
   return {
     ...product,
     in_stock: product.is_active && product.stock > 0,
+    // Use the real image URL if it exists; otherwise fallback to the emoji.
     image_src:
       product.image_url || (product.emoji ? emojiPicture(product.emoji) : ""),
   };
