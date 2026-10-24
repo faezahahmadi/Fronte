@@ -17,3 +17,32 @@ describe("API response errors", () => {
     });
   });
 });
+
+describe("production API routing", () => {
+  it("uses the same-origin Vercel API rewrite", async () => {
+    vi.stubEnv("PROD", true);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue([]),
+      }),
+    );
+    vi.resetModules();
+
+    try {
+      const { api: productionApi } = await import("../src/services/api");
+      await productionApi("/products/");
+
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/products/?sort=name",
+        expect.objectContaining({ method: "GET" }),
+      );
+    } finally {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
+  });
+});

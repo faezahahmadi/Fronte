@@ -15,6 +15,13 @@ switches product and API requests to the bundled mock data. Either setting can
 be used independently. Restart the Vite dev server after changing environment
 variables. The demo cart is saved in this browser's local storage.
 
+## Vercel deployment
+
+Production API requests use the same-origin `/api` path. `vercel.json` rewrites
+those requests to the live Django API, avoiding browser CORS restrictions.
+Local development continues to use `VITE_API_BASE_URL` (or `VITE_API_URL`) to
+select a backend. Redeploy on Vercel after adding or changing `vercel.json`.
+
 ## Sprint 4: Admin panel
 
 The admin panel is built on top of Sprints 1 to 3 (the shop itself is unchanged) and talks to the Sprint 4 Django backend.
