@@ -122,28 +122,32 @@ export function validateProduct(values, { creating = true } = {}) {
   return errors;
 }
 
-// ✅ CORRECTED: Now returns FormData instead of a JSON object so images can be uploaded.
+// Keep the JSON API contract unless an image needs a multipart upload.
 export function buildProductPayload(values, { creating = true } = {}) {
-  const formData = new FormData();
-  
-  formData.append("name", values.name.trim());
-  formData.append("description", values.description.trim());
-  formData.append("price", Number(values.price.trim()).toFixed(2));
-  formData.append("unit", values.unit.trim());
-  formData.append("emoji", values.emoji.trim());
-  formData.append("category", Number(values.category));
-  formData.append("is_active", Boolean(values.is_active));
-  
+  const payload = {
+    name: values.name.trim(),
+    description: values.description.trim(),
+    price: Number(values.price.trim()).toFixed(2),
+    unit: values.unit.trim(),
+    emoji: values.emoji.trim(),
+    category: Number(values.category),
+    is_active: Boolean(values.is_active),
+  };
+
   if (creating) {
-    formData.append("stock", Number(values.stock.trim()));
-  }
-  
-  // If the user selected an image, attach it to the payload
-  if (values.image_file) {
-    formData.append("image", values.image_file);
+    payload.stock = Number(values.stock.trim());
   }
 
-  return formData;
+  if (values.image_file) {
+    const formData = new FormData();
+    Object.entries(payload).forEach(([key, value]) => {
+      formData.append(key, value);
+    });
+    formData.append("image", values.image_file);
+    return formData;
+  }
+
+  return payload;
 }
 
 // ---------------------------------------------------------------- display helpers
@@ -172,15 +176,27 @@ export function adminMessage(error) {
 
 // ---------------------------------------------------------------- API calls
 
+function formPayload(payload) {
+  if (payload instanceof FormData) return payload;
+  const formData = new FormData();
+  Object.entries(payload).forEach(([key, value]) => {
+    formData.append(key, String(value));
+  });
+  return formData;
+}
+
 export const getStats = () => api("/admin/stats/");
 
 export const listCategories = () => api("/categories/");
 
 export const listAdminProducts = () => api("/admin/products/");
 export const createAdminProduct = (payload) =>
-  api("/admin/products/", { method: "POST", body: payload });
+  api("/admin/products/", { method: "POST", body: formPayload(payload) });
 export const updateAdminProduct = (id, payload) =>
-  api(`/admin/products/${id}/`, { method: "PATCH", body: payload });
+  api(`/admin/products/${id}/`, {
+    method: "PATCH",
+    body: formPayload(payload),
+  });
 export const updateStock = (id, stock) =>
   updateAdminProduct(id, { stock: Number(stock) });
 export const deleteAdminProduct = (id) =>
@@ -188,13 +204,17 @@ export const deleteAdminProduct = (id) =>
 
 export const listAdminOrders = (status = "") =>
   api(`/admin/orders/${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+export const getAdminOrder = (id) => api(`/admin/orders/${id}/`);
 export const updateOrderStatus = (id, status) =>
-  api(`/admin/orders/${id}/`, { method: "PATCH", body: { status } });
+  api(`/admin/orders/${id}/`, {
+    method: "PATCH",
+    body: formPayload({ status }),
+  });
 
 export const listCustomers = () => api("/admin/customers/");
 export const getCustomer = (id) => api(`/admin/customers/${id}/`);
 export const setCustomerActive = (id, isActive) =>
   api(`/admin/customers/${id}/`, {
     method: "PATCH",
-    body: { is_active: Boolean(isActive) },
+    body: formPayload({ is_active: Boolean(isActive) }),
   });

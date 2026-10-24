@@ -61,6 +61,7 @@ export function ProductForm({ product = null, categories, onSaved, onCancel }) {
       onSaved(saved, creating);
     } catch (failure) {
       setError(adminMessage(failure));
+    } finally {
       setSaving(false);
     }
   }
@@ -123,18 +124,15 @@ export function ProductForm({ product = null, categories, onSaved, onCancel }) {
       >
         <input className="input" placeholder="🍎" {...field("emoji")} />
       </Field>
-
-            {/* ✅ IMAGE UPLOAD FIELD */}
-      <Field 
-        label="Product Image" 
+      <Field
+        label="Product Image"
         className="sm:col-span-2"
         hint="Upload a .jpg or .png file. This will replace the emoji in the shop."
       >
-        <input 
-          type="file" 
+        <input
+          type="file"
           accept="image/*"
-          // Add this key to force React to reset the input when the form changes
-          key={product ? product.id : "new"} 
+          key={product ? product.id : "new"}
           className="block w-full text-sm text-slate-500 file:mr-4 file:rounded-full file:border-0 file:bg-green-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-green-700 hover:file:bg-green-100"
           onChange={(event) => {
             setValues((current) => ({
@@ -144,7 +142,6 @@ export function ProductForm({ product = null, categories, onSaved, onCancel }) {
           }}
         />
       </Field>
-
       <Field label="Description" className="sm:col-span-2">
         <textarea className="input min-h-24" rows={3} {...field("description")} />
       </Field>
@@ -174,7 +171,7 @@ export function ProductForm({ product = null, categories, onSaved, onCancel }) {
   );
 }
 
-export function ProductsTable({ products, onEdit, onDelete }) {
+export function ProductsTable({ products, onDelete }) {
   return (
     <div className="table-wrap">
       <table>
@@ -221,14 +218,13 @@ export function ProductsTable({ products, onEdit, onDelete }) {
               </td>
               <td>
                 <div className="flex flex-wrap items-start gap-4">
-                  <button
-                    type="button"
+                  <a
+                    href={`#/admin/products/${product.id}/edit`}
                     className="text-btn"
                     aria-label={`Edit ${product.name}`}
-                    onClick={() => onEdit(product)}
                   >
                     <Pencil size={12} aria-hidden="true" /> Edit
-                  </button>
+                  </a>
                   <ConfirmAction
                     danger
                     label="Delete"
@@ -247,20 +243,21 @@ export function ProductsTable({ products, onEdit, onDelete }) {
 
 export default function ProductsAdminPage() {
   const [products, setProducts] = useState(null);
-  const [categories, setCategories] = useState([]);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const [form, setForm] = useState(null); // null, "new", or the product being edited
+  const [message, setMessage] = useState(() => {
+    const savedMessage = sessionStorage.getItem("freshmart_product_message");
+    if (savedMessage) sessionStorage.removeItem("freshmart_product_message");
+    return savedMessage || "";
+  });
   const [search, setSearch] = useState("");
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
     let active = true;
-    Promise.all([listAdminProducts(), listCategories()])
-      .then(([productList, categoryList]) => {
+    listAdminProducts()
+      .then((productList) => {
         if (!active) return;
         setProducts(productList);
-        setCategories(categoryList);
       })
       .catch((failure) => {
         if (active) setError(adminMessage(failure));
@@ -275,30 +272,12 @@ export default function ProductsAdminPage() {
     setReload((count) => count + 1);
   }
 
-  function saved(product, created) {
-    setProducts((list) =>
-      created
-        ? [product, ...list]
-        : list.map((item) => (item.id === product.id ? product : item)),
-    );
-    setForm(null);
-    setError("");
-    setMessage(
-      created ? `${product.name} was added.` : `${product.name} was updated.`,
-    );
-  }
-
   async function remove(product) {
     setError("");
     setMessage("");
     try {
       await deleteAdminProduct(product.id);
       setProducts((list) => list.filter((item) => item.id !== product.id));
-      setForm((current) =>
-        current && current !== "new" && current.id === product.id
-          ? null
-          : current,
-      );
       setMessage(`${product.name} was deleted.`);
     } catch (failure) {
       setError(adminMessage(failure));
@@ -317,27 +296,11 @@ export default function ProductsAdminPage() {
         title="Products"
         intro="Add, edit and remove the products customers see in the shop."
       >
-        <button
-          type="button"
-          className="btn"
-          onClick={() => {
-            setMessage("");
-            setForm("new");
-          }}
-        >
+        <a className="btn" href="#/admin/products/new">
           <Plus size={15} aria-hidden="true" /> Add product
-        </button>
+        </a>
       </AdminHeading>
       <Feedback error={error} message={message} />
-      {form && (
-        <ProductForm
-          key={form === "new" ? "new" : form.id}
-          product={form === "new" ? null : form}
-          categories={categories}
-          onSaved={saved}
-          onCancel={() => setForm(null)}
-        />
-      )}
       {!products ? (
         error ? (
           <button type="button" className="text-btn text-sm" onClick={retry}>
@@ -372,11 +335,6 @@ export default function ProductsAdminPage() {
               </p>
               <ProductsTable
                 products={shown}
-                onEdit={(product) => {
-                  setMessage("");
-                  setForm(product);
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }}
                 onDelete={remove}
               />
             </>
@@ -391,6 +349,85 @@ export default function ProductsAdminPage() {
             </div>
           )}
         </>
+      )}
+    </>
+  );
+}
+
+export function ProductEditorPage({ route }) {
+  const productId = route.match(/^\/admin\/products\/(\d+)\/edit$/)?.[1];
+  const [product, setProduct] = useState(null);
+  const [categories, setCategories] = useState(null);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [reload, setReload] = useState(0);
+  const creating = !productId;
+
+  useEffect(() => {
+    let active = true;
+    const requests = [listCategories()];
+    if (productId) requests.push(listAdminProducts());
+    Promise.all(requests)
+      .then(([categoryList, products]) => {
+        if (!active) return;
+        setCategories(categoryList);
+        if (productId) {
+          const found = products.find((item) => item.id === Number(productId));
+          if (!found) setError("Product not found.");
+          else setProduct(found);
+        }
+      })
+      .catch((failure) => {
+        if (active) setError(adminMessage(failure));
+      });
+    return () => {
+      active = false;
+    };
+  }, [productId, reload]);
+
+  function retry() {
+    setError("");
+    setReload((count) => count + 1);
+  }
+
+  const ready = categories && (creating || product);
+
+  return (
+    <>
+      <AdminHeading
+        eyebrow="PRODUCT MANAGEMENT"
+        title={creating ? "Add product" : product ? `Edit ${product.name}` : "Edit product"}
+        intro={creating ? "Add a product to the shop catalog." : "Update the product details."}
+      >
+        <a className="btn-ghost" href="#/admin/products">Back to products</a>
+      </AdminHeading>
+      <Feedback error={error} message={message} />
+      {!ready ? (
+        error ? (
+          <button type="button" className="text-btn text-sm" onClick={retry}>
+            Try again
+          </button>
+        ) : (
+          <div className="empty-state">Loading product form…</div>
+        )
+      ) : (
+        <ProductForm
+          key={productId || "new"}
+          product={product}
+          categories={categories}
+          onSaved={(savedProduct, created) => {
+            const confirmation = created
+              ? `${savedProduct.name} was added.`
+              : `${savedProduct.name} was updated.`;
+            if (!created) {
+              sessionStorage.setItem("freshmart_product_message", confirmation);
+              window.location.hash = "/admin/products";
+              return;
+            }
+            setMessage(confirmation);
+          }}
+          onCancel={() => (window.location.hash = "/admin/products")}
+        />
       )}
     </>
   );
