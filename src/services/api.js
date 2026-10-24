@@ -5,7 +5,6 @@ const baseUrl = import.meta.env.PROD
       import.meta.env.VITE_API_URL ||
       "https://freshmart-ikhw.onrender.com/api"
     ).replace(/\/$/, "");
-
 // Django answers 401 "Invalid token" even on public endpoints when a stale token
 // is sent, so the token is only attached to endpoints that need it.
 const PUBLIC_PATHS = [
