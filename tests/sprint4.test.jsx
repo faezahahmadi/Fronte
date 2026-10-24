@@ -22,8 +22,6 @@ import {
   validateProduct,
 } from "../src/services/adminApi";
 import AdminLayout from "../src/pages/admin/AdminLayout";
-import ProductsAdminPage from "../src/pages/admin/ProductsAdminPage";
-import InventoryPage from "../src/pages/admin/InventoryPage";
 import OrdersAdminPage from "../src/pages/admin/OrdersAdminPage";
 import CustomersAdminPage from "../src/pages/admin/CustomersAdminPage";
 import { api } from "../src/services/api";
@@ -144,16 +142,29 @@ describe("Sprint 4: admin rules (same rules as the backend)", () => {
     expect(api.mock.calls).toEqual([
       ["/admin/stats/"],
       ["/admin/products/"],
-      ["/admin/products/", { method: "POST", body: { name: "Banana" } }],
-      ["/admin/products/2/", { method: "PATCH", body: { stock: 25 } }],
+      ["/admin/products/", { method: "POST", body: expect.any(FormData) }],
+      [
+        "/admin/products/2/",
+        { method: "PATCH", body: expect.any(FormData) },
+      ],
       ["/admin/products/3/", { method: "DELETE" }],
       ["/admin/orders/"],
       ["/admin/orders/?status=pending"],
-      ["/admin/orders/12/", { method: "PATCH", body: { status: "shipped" } }],
+      [
+        "/admin/orders/12/",
+        { method: "PATCH", body: expect.any(FormData) },
+      ],
       ["/admin/customers/"],
       ["/admin/customers/2/"],
-      ["/admin/customers/2/", { method: "PATCH", body: { is_active: false } }],
+      [
+        "/admin/customers/2/",
+        { method: "PATCH", body: expect.any(FormData) },
+      ],
     ]);
+    expect(api.mock.calls[2][1].body.get("name")).toBe("Banana");
+    expect(api.mock.calls[3][1].body.get("stock")).toBe("25");
+    expect(api.mock.calls[7][1].body.get("status")).toBe("shipped");
+    expect(api.mock.calls[10][1].body.get("is_active")).toBe("false");
   });
 });
 
@@ -216,7 +227,13 @@ describe("Sprint 4: admin screens", () => {
       throw new Error(`unexpected request ${options.method || "GET"} ${path}`);
     });
     const user = userEvent.setup();
-    render(<ProductsAdminPage />);
+    state.auth = {
+      user: { full_name: "Store Admin", is_staff: true },
+      ready: true,
+      logout: vi.fn(),
+    };
+    window.location.hash = "#/admin/products";
+    render(<App />);
     await screen.findByText("Eggs", { selector: "b" });
     const eggsRow = rowOf("Eggs");
     expect(within(eggsRow).getByText("Out of stock")).toBeInTheDocument();
@@ -231,6 +248,10 @@ describe("Sprint 4: admin screens", () => {
     );
     expect(await screen.findByText("Eggs was deleted.")).toBeInTheDocument();
     expect(screen.queryByText("Eggs", { selector: "b" })).not.toBeInTheDocument();
+
+    await user.click(within(rowOf("Apple")).getByRole("link", { name: "Edit Apple" }));
+    expect(await screen.findByRole("form", { name: "Edit product" })).toBeInTheDocument();
+    expect(screen.getByLabelText(/^product name/i)).toHaveValue("Apple");
   });
 
   it("the add form blocks an incomplete product and then posts the right body", async () => {
@@ -243,10 +264,16 @@ describe("Sprint 4: admin screens", () => {
       throw new Error(`unexpected request ${options.method || "GET"} ${path}`);
     });
     const user = userEvent.setup();
-    render(<ProductsAdminPage />);
+    state.auth = {
+      user: { full_name: "Store Admin", is_staff: true },
+      ready: true,
+      logout: vi.fn(),
+    };
+    window.location.hash = "#/admin/products";
+    render(<App />);
     await screen.findByRole("table");
-    await user.click(screen.getByRole("button", { name: /add product/i }));
-    const form = screen.getByRole("form", { name: "Add a product" });
+    await user.click(screen.getByRole("link", { name: /add product/i }));
+    const form = await screen.findByRole("form", { name: "Add a product" });
 
     await user.click(within(form).getByRole("button", { name: "Add product" }));
     expect(within(form).getByText("Enter the product name.")).toBeInTheDocument();
@@ -263,50 +290,109 @@ describe("Sprint 4: admin screens", () => {
     await user.click(within(form).getByRole("button", { name: "Add product" }));
 
     await waitFor(() =>
-      expect(api).toHaveBeenCalledWith("/admin/products/", {
-        method: "POST",
-        body: {
-          name: "Banana", description: "", price: "2.50", unit: "each", emoji: "🍌",
-          category: 1, is_active: true, stock: 30,
-        },
-      }),
+      expect(
+        api.mock.calls.some(
+          ([path, options]) =>
+            path === "/admin/products/" &&
+            options?.method === "POST" &&
+            options.body instanceof FormData &&
+            options.body.get("name") === "Banana" &&
+            options.body.get("stock") === "30",
+        ),
+      ).toBe(true),
     );
     expect(await screen.findByText("Banana was added.")).toBeInTheDocument();
-    expect(screen.getByText("Banana", { selector: "b" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Add product" })).toBeInTheDocument();
   });
 
-  it("inventory warns about low and sold-out products and saves a new stock quantity", async () => {
+  it("returns to the product list after saving an edit and clears the saving state", async () => {
     api.mockReset();
+    const updatedApple = { ...apple, name: "Green Apple" };
+    let saved = false;
     api.mockImplementation(async (path, options = {}) => {
-      if (path === "/admin/products/" && !options.method) return [apple, milk, eggs];
-      if (path === "/admin/products/2/" && options.method === "PATCH")
-        return { ...milk, stock: options.body.stock, stock_status: "in_stock" };
+      if (path === "/categories/") return categories;
+      if (path === "/admin/products/" && !options.method)
+        return saved ? [updatedApple] : [apple];
+      if (path === "/admin/products/1/" && options.method === "PATCH") {
+        saved = true;
+        return updatedApple;
+      }
       throw new Error(`unexpected request ${options.method || "GET"} ${path}`);
     });
     const user = userEvent.setup();
-    render(<InventoryPage />);
+    state.auth = {
+      user: { full_name: "Store Admin", is_staff: true },
+      ready: true,
+      logout: vi.fn(),
+    };
+    window.location.hash = "#/admin/products/1/edit";
+    render(<App />);
+
+    const form = await screen.findByRole("form", { name: "Edit product" });
+    const name = within(form).getByLabelText(/^product name/i);
+    await user.clear(name);
+    await user.type(name, "Green Apple");
+    await user.click(within(form).getByRole("button", { name: "Save changes" }));
+
+    expect(await screen.findByText("Green Apple was updated.")).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/admin/products");
+    expect(screen.queryByRole("form", { name: "Edit product" })).not.toBeInTheDocument();
+    expect(await screen.findByText("Green Apple", { selector: "b" })).toBeInTheDocument();
+  });
+
+  it("inventory warns about low and sold-out products and edits stock on its own page", async () => {
+    api.mockReset();
+    let updatedMilk = milk;
+    api.mockImplementation(async (path, options = {}) => {
+      if (path === "/admin/products/" && !options.method)
+        return [apple, updatedMilk, eggs];
+      if (path === "/admin/products/2/" && options.method === "PATCH")
+        return (updatedMilk = {
+          ...milk,
+          stock: Number(options.body.get("stock")),
+          stock_status: "in_stock",
+        });
+      throw new Error(`unexpected request ${options.method || "GET"} ${path}`);
+    });
+    const user = userEvent.setup();
+    state.auth = {
+      user: { full_name: "Store Admin", is_staff: true },
+      ready: true,
+      logout: vi.fn(),
+    };
+    window.location.hash = "#/admin/inventory";
+    render(<App />);
     await screen.findByRole("table");
     const alerts = screen.getByRole("region", { name: "Stock alerts" });
     expect(alerts).toHaveTextContent(/1 product is out of stock:\s*Eggs/);
     expect(alerts).toHaveTextContent(/1 product is running low \(10 or fewer left\):\s*Milk/);
 
-    const box = screen.getByLabelText("New stock for Milk");
-    const save = within(rowOf("Milk")).getByRole("button", { name: "Save" });
-    expect(save).toBeDisabled(); // nothing changed yet
+    await user.click(within(rowOf("Milk")).getByRole("link", { name: "Update stock" }));
+    const box = await screen.findByLabelText("New stock quantity");
     await user.clear(box);
     await user.type(box, "-3");
-    await user.click(save);
+    await user.click(screen.getByRole("button", { name: "Save stock" }));
     expect(await screen.findByText("Enter a whole number, 0 or more.")).toBeInTheDocument();
-    expect(api).toHaveBeenCalledTimes(1); // only the first list request: nothing was sent
+    expect(api).toHaveBeenCalledTimes(2); // list and selected item load; invalid value was not sent
 
     await user.clear(box);
     await user.type(box, "25");
-    await user.click(save);
+    await user.click(screen.getByRole("button", { name: "Save stock" }));
     await waitFor(() =>
-      expect(api).toHaveBeenCalledWith("/admin/products/2/", { method: "PATCH", body: { stock: 25 } }),
+      expect(
+        api.mock.calls.some(
+          ([path, options]) =>
+            path === "/admin/products/2/" &&
+            options.method === "PATCH" &&
+            options.body instanceof FormData &&
+            options.body.get("stock") === "25",
+        ),
+      ).toBe(true),
     );
     expect(await screen.findByText("Milk now has 25 in stock.")).toBeInTheDocument();
-    expect(within(rowOf("Milk")).getByText("In stock")).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/admin/inventory");
+    expect(within(rowOf("Milk")).getByText("25", { selector: "b" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("New stock quantity")).not.toBeInTheDocument();
   });
 
   it("orders offer only the allowed next steps, filter by status and save a change", async () => {
@@ -315,7 +401,7 @@ describe("Sprint 4: admin screens", () => {
       if (path.startsWith("/admin/orders/") && !options.method)
         return [order(12, "pending"), order(11, "delivered")];
       if (path === "/admin/orders/12/" && options.method === "PATCH")
-        return order(12, options.body.status);
+        return order(12, options.body.get("status"));
       throw new Error(`unexpected request ${options.method || "GET"} ${path}`);
     });
     const user = userEvent.setup();
@@ -339,7 +425,15 @@ describe("Sprint 4: admin screens", () => {
 
     await user.click(screen.getByRole("button", { name: "Start processing" }));
     await waitFor(() =>
-      expect(api).toHaveBeenCalledWith("/admin/orders/12/", { method: "PATCH", body: { status: "processing" } }),
+      expect(
+        api.mock.calls.some(
+          ([path, options]) =>
+            path === "/admin/orders/12/" &&
+            options.method === "PATCH" &&
+            options.body instanceof FormData &&
+            options.body.get("status") === "processing",
+        ),
+      ).toBe(true),
     );
     expect(await screen.findByText("Order #12 is now processing.")).toBeInTheDocument();
     expect(screen.queryByText("Order #12")).not.toBeInTheDocument(); // no longer 'pending'
@@ -350,7 +444,7 @@ describe("Sprint 4: admin screens", () => {
     api.mockImplementation(async (path, options = {}) => {
       if (path === "/admin/customers/" && !options.method) return [sam, lina];
       if (path === "/admin/customers/2/" && options.method === "PATCH")
-        return { ...sam, is_active: options.body.is_active };
+        return { ...sam, is_active: options.body.get("is_active") === "true" };
       throw new Error(`unexpected request ${options.method || "GET"} ${path}`);
     });
     const user = userEvent.setup();
@@ -364,7 +458,15 @@ describe("Sprint 4: admin screens", () => {
     expect(api).toHaveBeenCalledTimes(1); // asking first: nothing sent yet
     await user.click(screen.getByRole("button", { name: "Confirm" }));
     await waitFor(() =>
-      expect(api).toHaveBeenCalledWith("/admin/customers/2/", { method: "PATCH", body: { is_active: false } }),
+      expect(
+        api.mock.calls.some(
+          ([path, options]) =>
+            path === "/admin/customers/2/" &&
+            options.method === "PATCH" &&
+            options.body instanceof FormData &&
+            options.body.get("is_active") === "false",
+        ),
+      ).toBe(true),
     );
     expect(await screen.findByText("Sam Shopper was blocked.")).toBeInTheDocument();
     const blocked = rowOf("Sam Shopper");
@@ -372,8 +474,57 @@ describe("Sprint 4: admin screens", () => {
 
     await user.click(within(blocked).getByRole("button", { name: "Unblock" }));
     await waitFor(() =>
-      expect(api).toHaveBeenCalledWith("/admin/customers/2/", { method: "PATCH", body: { is_active: true } }),
+      expect(
+        api.mock.calls.some(
+          ([path, options]) =>
+            path === "/admin/customers/2/" &&
+            options.method === "PATCH" &&
+            options.body instanceof FormData &&
+            options.body.get("is_active") === "true",
+        ),
+      ).toBe(true),
     );
     expect(await screen.findByText("Sam Shopper was unblocked.")).toBeInTheDocument();
+  });
+
+  it("customer details open as a separate admin page", async () => {
+    api.mockReset();
+    api.mockImplementation(async (path, options = {}) => {
+      if (path === "/admin/customers/" && !options.method) return [sam, lina];
+      if (path === "/admin/customers/2/") return sam;
+      throw new Error(`unexpected request ${options.method || "GET"} ${path}`);
+    });
+    state.auth = {
+      user: { full_name: "Store Admin", is_staff: true },
+      ready: true,
+      logout: vi.fn(),
+    };
+    window.location.hash = "#/admin/customers";
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Sam Shopper", { selector: "b" });
+
+    await user.click(within(rowOf("Sam Shopper")).getByRole("link", { name: "View Sam Shopper" }));
+    expect(await screen.findByRole("region", { name: "Details for Sam Shopper" })).toBeInTheDocument();
+    expect(api).toHaveBeenCalledWith("/admin/customers/2/");
+  });
+
+  it("order details open as a separate admin page", async () => {
+    api.mockReset();
+    api.mockImplementation(async (path) => {
+      if (path === "/admin/orders/12/") return order(12, "pending");
+      throw new Error(`unexpected request ${path}`);
+    });
+    state.auth = {
+      user: { full_name: "Store Admin", is_staff: true },
+      ready: true,
+      logout: vi.fn(),
+    };
+    window.location.hash = "#/admin/orders/12";
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Order #12" })).toBeInTheDocument();
+    expect(screen.getByText("Delivery information")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to orders" })).toBeInTheDocument();
   });
 });

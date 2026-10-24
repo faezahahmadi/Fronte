@@ -61,31 +61,8 @@ export function StockAlerts({ products }) {
   );
 }
 
-// One product with a box and a Save button that sets its stock quantity.
-export function StockRow({ product, onSave }) {
-  const [value, setValue] = useState(String(product.stock));
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const changed = value.trim() !== String(product.stock);
-
-  async function save(event) {
-    event.preventDefault();
-    if (!validStock(value)) {
-      setError("Enter a whole number, 0 or more.");
-      return;
-    }
-    setSaving(true);
-    setError("");
-    try {
-      const saved = await onSave(product, Number(value.trim()));
-      setValue(String(saved.stock));
-    } catch (failure) {
-      setError(adminMessage(failure));
-    } finally {
-      setSaving(false);
-    }
-  }
-
+// One product summary with a separate inventory editor page.
+export function StockRow({ product }) {
   return (
     <tr>
       <td>
@@ -108,32 +85,9 @@ export function StockRow({ product, onSave }) {
         <StockBadge product={product} />
       </td>
       <td>
-        <form onSubmit={save} noValidate className="grid gap-1.5">
-          <div className="flex items-center gap-2">
-            <input
-              className="input w-24 py-2"
-              inputMode="numeric"
-              aria-label={`New stock for ${product.name}`}
-              aria-invalid={!!error}
-              value={value}
-              onChange={(event) => {
-                setValue(event.target.value);
-                setError("");
-              }}
-            />
-            <button
-              className="btn px-4 py-2 text-[11px]"
-              disabled={!changed || saving}
-            >
-              {saving ? "Saving…" : "Save"}
-            </button>
-          </div>
-          {error && (
-            <small role="alert" className="max-w-[260px] font-semibold text-clay">
-              {error}
-            </small>
-          )}
-        </form>
+        <a className="text-btn" href={`#/admin/inventory/${product.id}`}>
+          Update stock
+        </a>
       </td>
     </tr>
   );
@@ -143,7 +97,11 @@ export function StockRow({ product, onSave }) {
 export default function InventoryPage() {
   const [products, setProducts] = useState(null);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(() => {
+    const savedMessage = sessionStorage.getItem("freshmart_inventory_message");
+    if (savedMessage) sessionStorage.removeItem("freshmart_inventory_message");
+    return savedMessage || "";
+  });
   const [filter, setFilter] = useState("all");
   const [reload, setReload] = useState(0);
 
@@ -165,17 +123,6 @@ export default function InventoryPage() {
     setError("");
     setMessage("");
     setReload((count) => count + 1);
-  }
-
-  // Throws on failure so the row can show the server's message next to its box.
-  async function save(product, stock) {
-    setMessage("");
-    const saved = await updateStock(product.id, stock);
-    setProducts((list) =>
-      list.map((item) => (item.id === saved.id ? saved : item)),
-    );
-    setMessage(`${saved.name} now has ${saved.stock} in stock.`);
-    return saved;
   }
 
   const sorted = [...(products ?? [])].sort((a, b) =>
@@ -230,7 +177,7 @@ export default function InventoryPage() {
                     <th>Product</th>
                     <th>In stock</th>
                     <th>Status</th>
-                    <th>Update stock</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -238,7 +185,6 @@ export default function InventoryPage() {
                     <StockRow
                       key={`${product.id}-${product.stock}`}
                       product={product}
-                      onSave={save}
                     />
                   ))}
                 </tbody>
@@ -251,6 +197,116 @@ export default function InventoryPage() {
             </div>
           )}
         </>
+      )}
+    </>
+  );
+}
+
+export function StockEditorPage({ route }) {
+  const productId = route.match(/^\/admin\/inventory\/(\d+)$/)?.[1];
+  const [product, setProduct] = useState(null);
+  const [value, setValue] = useState("");
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    listAdminProducts()
+      .then((products) => {
+        if (!active) return;
+        const found = products.find((item) => item.id === Number(productId));
+        if (found) {
+          setProduct(found);
+          setValue(String(found.stock));
+        } else {
+          setError("Product not found.");
+        }
+      })
+      .catch((failure) => {
+        if (active) setError(adminMessage(failure));
+      });
+    return () => {
+      active = false;
+    };
+  }, [productId, reload]);
+
+  async function save(event) {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+    if (!validStock(value)) {
+      setError("Enter a whole number, 0 or more.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const saved = await updateStock(product.id, value);
+      sessionStorage.setItem(
+        "freshmart_inventory_message",
+        `${saved.name} now has ${saved.stock} in stock.`,
+      );
+      window.location.hash = "/admin/inventory";
+    } catch (failure) {
+      setError(adminMessage(failure));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <AdminHeading
+        eyebrow="INVENTORY MANAGEMENT"
+        title={product ? `Update ${product.name}` : "Update stock"}
+        intro="Set the available quantity for this product."
+      >
+        <a className="btn-ghost" href="#/admin/inventory">Back to inventory</a>
+      </AdminHeading>
+      <Feedback error={error} message={message} />
+      {product ? (
+        <form onSubmit={save} noValidate className="card grid max-w-xl gap-4">
+          <div className="flex items-center gap-3">
+            <ProductThumb product={product} />
+            <div>
+              <b className="text-forest">{product.name}</b>
+              <p className="text-xs text-muted">
+                Current stock: {product.stock} {product.unit}
+              </p>
+            </div>
+          </div>
+          <label className="field">
+            New stock quantity
+            <input
+              className="input"
+              inputMode="numeric"
+              aria-label="New stock quantity"
+              aria-invalid={!!error}
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+            />
+          </label>
+          <div className="flex flex-wrap gap-3">
+            <button className="btn" disabled={saving}>
+              {saving ? "Saving…" : "Save stock"}
+            </button>
+            <a className="btn-ghost" href="#/admin/inventory">Cancel</a>
+          </div>
+        </form>
+      ) : error ? (
+        <button
+          type="button"
+          className="text-btn text-sm"
+          onClick={() => {
+            setError("");
+            setReload((count) => count + 1);
+          }}
+        >
+          Try again
+        </button>
+      ) : (
+        <div className="empty-state">Loading inventory item…</div>
       )}
     </>
   );

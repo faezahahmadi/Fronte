@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Search, X } from "lucide-react";
+import { Search } from "lucide-react";
 import ConfirmAction from "../../components/ConfirmAction";
 import Feedback from "../../components/Feedback";
 import { AdminHeading } from "../../components/AdminUI";
@@ -42,7 +42,7 @@ export function BlockControl({ customer, onChange, busy = false }) {
   );
 }
 
-export function CustomersTable({ customers, onView, onChange, busyId }) {
+export function CustomersTable({ customers, onChange, busyId }) {
   return (
     <div className="table-wrap">
       <table>
@@ -71,14 +71,13 @@ export function CustomersTable({ customers, onView, onChange, busyId }) {
               </td>
               <td>
                 <div className="flex flex-wrap items-start gap-4">
-                  <button
-                    type="button"
+                  <a
+                    href={`#/admin/customers/${customer.id}`}
                     className="text-btn"
                     aria-label={`View ${customer.full_name}`}
-                    onClick={() => onView(customer)}
                   >
                     View
-                  </button>
+                  </a>
                   <BlockControl
                     customer={customer}
                     onChange={onChange}
@@ -94,7 +93,7 @@ export function CustomersTable({ customers, onView, onChange, busyId }) {
   );
 }
 
-function CustomerDetail({ customer, onChange, onClose, busy }) {
+function CustomerDetail({ customer, onChange, busy }) {
   const rows = [
     ["Email", customer.email],
     ["Joined", day(customer.date_joined)],
@@ -110,14 +109,6 @@ function CustomerDetail({ customer, onChange, onClose, busy }) {
             <AccountStatus customer={customer} />
           </div>
         </div>
-        <button
-          type="button"
-          className="text-btn"
-          aria-label="Close customer details"
-          onClick={onClose}
-        >
-          <X size={14} aria-hidden="true" /> Close
-        </button>
       </div>
       <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {rows.map(([label, value]) => (
@@ -142,7 +133,6 @@ export default function CustomersAdminPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [reload, setReload] = useState(0);
 
@@ -159,25 +149,6 @@ export default function CustomersAdminPage() {
       active = false;
     };
   }, [reload]);
-
-  // Opening a customer asks the API for that one record, so the counts are fresh.
-  useEffect(() => {
-    if (selectedId == null) return;
-    let active = true;
-    getCustomer(selectedId)
-      .then((fresh) => {
-        if (!active) return;
-        setCustomers((list) =>
-          list ? list.map((item) => (item.id === fresh.id ? fresh : item)) : list,
-        );
-      })
-      .catch((failure) => {
-        if (active) setError(adminMessage(failure));
-      });
-    return () => {
-      active = false;
-    };
-  }, [selectedId]);
 
   function retry() {
     setError("");
@@ -207,8 +178,6 @@ export default function CustomersAdminPage() {
   const shown = (customers ?? []).filter((customer) =>
     `${customer.full_name} ${customer.email}`.toLowerCase().includes(needle),
   );
-  const selected = customers?.find((customer) => customer.id === selectedId);
-
   return (
     <>
       <AdminHeading
@@ -217,14 +186,6 @@ export default function CustomersAdminPage() {
         intro="See who has registered, how much they have ordered, and block an account if needed."
       />
       <Feedback error={error} message={message} />
-      {selected && (
-        <CustomerDetail
-          customer={selected}
-          busy={busyId === selected.id}
-          onChange={changeAccess}
-          onClose={() => setSelectedId(null)}
-        />
-      )}
       {!customers ? (
         error ? (
           <button type="button" className="text-btn text-sm" onClick={retry}>
@@ -260,7 +221,6 @@ export default function CustomersAdminPage() {
               <CustomersTable
                 customers={shown}
                 busyId={busyId}
-                onView={(customer) => setSelectedId(customer.id)}
                 onChange={changeAccess}
               />
             </>
@@ -277,6 +237,75 @@ export default function CustomersAdminPage() {
             </div>
           )}
         </>
+      )}
+    </>
+  );
+}
+
+export function CustomerDetailsPage({ route }) {
+  const customerId = route.match(/^\/admin\/customers\/(\d+)$/)?.[1];
+  const [customer, setCustomer] = useState(null);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    getCustomer(customerId)
+      .then((record) => {
+        if (active) setCustomer(record);
+      })
+      .catch((failure) => {
+        if (active) setError(adminMessage(failure));
+      });
+    return () => {
+      active = false;
+    };
+  }, [customerId, reload]);
+
+  async function changeAccess(record, isActive) {
+    setError("");
+    setMessage("");
+    setBusy(true);
+    try {
+      const saved = await setCustomerActive(record.id, isActive);
+      setCustomer(saved);
+      setMessage(
+        `${saved.full_name} was ${saved.is_active ? "unblocked" : "blocked"}.`,
+      );
+    } catch (failure) {
+      setError(adminMessage(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <AdminHeading
+        eyebrow="CUSTOMER ACCOUNTS"
+        title={customer ? customer.full_name : "Customer details"}
+        intro="Review this customer account and manage access."
+      >
+        <a className="btn-ghost" href="#/admin/customers">Back to customers</a>
+      </AdminHeading>
+      <Feedback error={error} message={message} />
+      {customer ? (
+        <CustomerDetail customer={customer} onChange={changeAccess} busy={busy} />
+      ) : error ? (
+        <button
+          type="button"
+          className="text-btn text-sm"
+          onClick={() => {
+            setError("");
+            setReload((count) => count + 1);
+          }}
+        >
+          Try again
+        </button>
+      ) : (
+        <div className="empty-state">Loading customer details…</div>
       )}
     </>
   );

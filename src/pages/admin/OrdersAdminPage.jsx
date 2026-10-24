@@ -6,6 +6,7 @@ import { deliveryLabel, paymentLabel } from "../../services/checkoutRules";
 import {
   STATUS_ACTIONS,
   adminMessage,
+  getAdminOrder,
   itemSummary,
   listAdminOrders,
   money,
@@ -23,9 +24,8 @@ const FILTERS = [
   ["cancelled", "Cancelled"],
 ];
 
-// One customer order: summary, the status controls, and the full details when opened.
+// One customer order summary with its available status actions.
 export function OrderCard({ order, onStatus, busy = false }) {
-  const [open, setOpen] = useState(false);
   const next = nextStatuses(order.status);
   return (
     <article className="my-4 grid gap-3 rounded-2xl border border-line bg-white p-[18px] shadow-soft sm:p-[22px]">
@@ -72,82 +72,122 @@ export function OrderCard({ order, onStatus, busy = false }) {
             This order is {order.status}. Its status can no longer be changed.
           </p>
         )}
+        <a className="text-btn ml-auto" href={`#/admin/orders/${order.id}`}>
+          View details
+        </a>
+      </div>
+    </article>
+  );
+}
+
+function OrderDetails({ order }) {
+  return (
+    <section className="card grid gap-5 md:grid-cols-[minmax(0,1fr)_240px]">
+      <div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Quantity</th>
+                <th>Unit price</th>
+                <th>Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {order.items.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.product_name}</td>
+                  <td>{item.quantity}</td>
+                  <td>{money(item.unit_price)}</td>
+                  <td>{money(item.line_total)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <h4 className="mb-1 mt-5 font-heading text-[15px] font-semibold text-forest">
+          Delivery information
+        </h4>
+        <p className="my-2 text-[13px] text-[#75836e]">
+          {order.full_name}
+          <br />
+          {order.email} · {order.phone}
+        </p>
+        <p className="my-2 text-[13px] text-[#75836e]">
+          {order.address}, {order.city}
+          {order.notes && (
+            <>
+              <br />
+              Notes: {order.notes}
+            </>
+          )}
+        </p>
+        <p className="my-2 text-[13px] text-[#75836e]">
+          {deliveryLabel(order.delivery_option)}
+          <br />
+          {paymentLabel(order.payment_method)}
+        </p>
+      </div>
+      <aside className="order-summary md:static">
+        <h3>Order total</h3>
+        <div><span>Subtotal</span><b>{money(order.subtotal)}</b></div>
+        <div><span>Delivery</span><b>{money(order.delivery_fee)}</b></div>
+        <div className="border-t border-[#dce6d3] pt-[18px] text-[15px]">
+          <span>Total</span><b>{money(order.total)}</b>
+        </div>
+      </aside>
+    </section>
+  );
+}
+
+export function OrderDetailsPage({ route }) {
+  const orderId = route.match(/^\/admin\/orders\/(\d+)$/)?.[1];
+  const [order, setOrder] = useState(null);
+  const [error, setError] = useState("");
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    getAdminOrder(orderId)
+      .then((record) => {
+        if (active) setOrder(record);
+      })
+      .catch((failure) => {
+        if (active) setError(adminMessage(failure));
+      });
+    return () => {
+      active = false;
+    };
+  }, [orderId, reload]);
+
+  return (
+    <>
+      <AdminHeading
+        eyebrow="ORDER MANAGEMENT"
+        title={order ? `Order #${order.id}` : "Order details"}
+        intro={order ? `${order.status} · ${when(order.created_at)}` : "Review order items and delivery information."}
+      >
+        <a className="btn-ghost" href="#/admin/orders">Back to orders</a>
+      </AdminHeading>
+      <Feedback error={error} />
+      {order ? (
+        <OrderDetails order={order} />
+      ) : error ? (
         <button
           type="button"
-          className="text-btn ml-auto"
-          aria-expanded={open}
-          onClick={() => setOpen(!open)}
+          className="text-btn text-sm"
+          onClick={() => {
+            setError("");
+            setReload((count) => count + 1);
+          }}
         >
-          {open ? "Hide details" : "View details"}
+          Try again
         </button>
-      </div>
-
-      {open && (
-        <div className="grid gap-5 border-t border-[#edf1e4] pt-4 md:grid-cols-[minmax(0,1fr)_240px]">
-          <div>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Product</th>
-                    <th>Quantity</th>
-                    <th>Unit price</th>
-                    <th>Subtotal</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {order.items.map((item) => (
-                    <tr key={item.id}>
-                      <td>{item.product_name}</td>
-                      <td>{item.quantity}</td>
-                      <td>{money(item.unit_price)}</td>
-                      <td>{money(item.line_total)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <h4 className="mb-1 mt-5 font-heading text-[15px] font-semibold text-forest">
-              Delivery information
-            </h4>
-            <p className="my-2 text-[13px] text-[#75836e]">
-              {order.full_name}
-              <br />
-              {order.email} · {order.phone}
-            </p>
-            <p className="my-2 text-[13px] text-[#75836e]">
-              {order.address}, {order.city}
-              {order.notes && (
-                <>
-                  <br />
-                  Notes: {order.notes}
-                </>
-              )}
-            </p>
-            <p className="my-2 text-[13px] text-[#75836e]">
-              {deliveryLabel(order.delivery_option)}
-              <br />
-              {paymentLabel(order.payment_method)}
-            </p>
-          </div>
-          <aside className="order-summary md:static">
-            <h3>Order total</h3>
-            <div>
-              <span>Subtotal</span>
-              <b>{money(order.subtotal)}</b>
-            </div>
-            <div>
-              <span>Delivery</span>
-              <b>{money(order.delivery_fee)}</b>
-            </div>
-            <div className="border-t border-[#dce6d3] pt-[18px] text-[15px]">
-              <span>Total</span>
-              <b>{money(order.total)}</b>
-            </div>
-          </aside>
-        </div>
+      ) : (
+        <div className="empty-state">Loading order details…</div>
       )}
-    </article>
+    </>
   );
 }
 

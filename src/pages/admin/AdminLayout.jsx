@@ -15,6 +15,10 @@ import ProductsAdminPage from "./ProductsAdminPage";
 import InventoryPage from "./InventoryPage";
 import OrdersAdminPage from "./OrdersAdminPage";
 import CustomersAdminPage from "./CustomersAdminPage";
+import { ProductEditorPage } from "./ProductsAdminPage";
+import { StockEditorPage } from "./InventoryPage";
+import { OrderDetailsPage } from "./OrdersAdminPage";
+import { CustomerDetailsPage } from "./CustomersAdminPage";
 
 const TABS = [
   { path: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -58,7 +62,20 @@ export default function AdminLayout({ route }) {
       </section>
     );
 
+  const productEditor = path.match(/^\/admin\/products\/(new|\d+\/edit)$/);
+  const stockEditor = path.match(/^\/admin\/inventory\/(\d+)$/);
+  const orderDetails = path.match(/^\/admin\/orders\/(\d+)$/);
+  const customerDetails = path.match(/^\/admin\/customers\/(\d+)$/);
   const Page = PAGES[path];
+  const detailPage = productEditor
+    ? <ProductEditorPage route={path} />
+    : stockEditor
+      ? <StockEditorPage route={path} />
+      : orderDetails
+        ? <OrderDetailsPage route={path} />
+        : customerDetails
+          ? <CustomerDetailsPage route={path} />
+          : null;
   return (
     <>
       <header className="sticky top-0 z-30 border-b border-white/10 bg-linear-to-b from-leaf-900 to-forest text-white shadow-[0_12px_30px_-20px_rgba(15,46,27,0.8)]">
@@ -72,8 +89,16 @@ export default function AdminLayout({ route }) {
               <a
                 key={tabPath}
                 href={`#${tabPath}`}
-                aria-current={path === tabPath ? "page" : undefined}
-                className={`nav-link gap-1.5 ${path === tabPath ? "is-active" : ""}`}
+                aria-current={
+                  path === tabPath || path.startsWith(`${tabPath}/`)
+                    ? "page"
+                    : undefined
+                }
+                className={`nav-link gap-1.5 ${
+                  path === tabPath || path.startsWith(`${tabPath}/`)
+                    ? "is-active"
+                    : ""
+                }`}
               >
                 <Icon size={15} aria-hidden="true" />
                 {label}
@@ -95,7 +120,7 @@ export default function AdminLayout({ route }) {
         </div>
       </header>
       <section className="page">
-        {Page ? (
+        {detailPage || (Page ? (
           <Page />
         ) : (
           <div className="empty-state">
@@ -104,7 +129,7 @@ export default function AdminLayout({ route }) {
               Back to the dashboard <ArrowRight size={14} />
             </a>
           </div>
-        )}
+        ))}
       </section>
     </>
   );
