@@ -32,6 +32,37 @@ function validateEmail(value) {
   return true;
 }
 
+// ---- Misspelled Gmail check (registration only) ----
+// Rejects addresses such as name@gmial.com, name@gmai.com or name@gmail.con and
+// suggests the right spelling. Real providers that look similar are allowed.
+const GMAIL = "gmail.com";
+const LOOKS_SIMILAR_BUT_REAL = new Set(["mail.com", "email.com"]);
+
+// Number of single-letter changes (add, remove, replace, swap two neighbours) between two words.
+function editDistance(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
+        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1); // swapped letters, like "gmial"
+    }
+  }
+  return d[a.length][b.length];
+}
+
+function validateGmailSpelling(value) {
+  const email = value.trim();
+  const at = email.lastIndexOf("@");
+  const domain = email.slice(at + 1).toLowerCase();
+  if (domain === GMAIL || LOOKS_SIMILAR_BUT_REAL.has(domain)) return true;
+  if (domain.startsWith("gmail") || editDistance(domain, GMAIL) <= 2)
+    return `"${domain}" looks like a misspelling of gmail.com. Did you mean ${email.slice(0, at)}@${GMAIL}?`;
+  return true;
+}
+
 export default function AuthPage({ register = false, admin = false }) {
   const { login } = useAuth();
   const {
@@ -129,7 +160,14 @@ export default function AuthPage({ register = false, admin = false }) {
             autoComplete="email"
             {...registerField("email", {
               required: "Enter your email address.",
-              validate: validateEmail,
+              // Registration also rejects a misspelled Gmail address; logging in does not,
+              // so an older account can always sign in.
+              validate: (value) => {
+                const result = validateEmail(value);
+                return result === true && register
+                  ? validateGmailSpelling(value)
+                  : result;
+              },
             })}
           />
           {errors.email && (
